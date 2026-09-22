@@ -3,6 +3,7 @@ import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { InvitePush } from "../components/notifications/InvitePush";
+import { PontNotifications } from "../components/notifications/PontNotifications";
 import { NotificationsGlobales } from "../components/settings/NotificationsGlobales";
 import { brancherNotifications, effacerNotifications } from "../lib/notifications";
 import { activerPush } from "../lib/push";
@@ -23,6 +24,11 @@ vi.mock("@tacita/messaging", () => ({
 
 const poserPusher = vi.fn(async (_pusher: Record<string, unknown>) => ({}));
 const evenementDuSalon = vi.fn<() => unknown>();
+
+/** Seul `PontNotifications` lit la session par le contexte ; les autres la reçoivent en prop. */
+vi.mock("../components/onboarding/SessionProvider", () => ({
+  useSession: () => ({ etat: { phase: "prete", session: session() } }),
+}));
 
 const session = () =>
   ({
@@ -146,8 +152,9 @@ describe("REQ-UI-18 — abonnement Web Push, réveil, déchiffrement local, noti
     };
     expect(pusher.pushkey).toBe("https://push.example.org/abonnement-1");
     expect(pusher.app_id).toBe("org.tacita.web");
-    // REQ-PSH-02 : ce format est ce qui garantit que Synapse n'envoie que des IDs.
-    expect(pusher.data.format).toBe("event_id_only");
+    // REQ-PSH-02 (amendée E-12) : plus de `event_id_only`, qui retirait aussi l'expéditeur.
+    // C'est la passerelle qui filtre ce qui part au navigateur.
+    expect(pusher.data.format).toBeUndefined();
     expect(pusher.data).toMatchObject({ p256dh: "cle-p256dh", auth: "cle-auth" });
   });
 
@@ -242,6 +249,59 @@ describe("REQ-UI-18 — abonnement Web Push, réveil, déchiffrement local, noti
     } finally {
       delete (globalThis.navigator as { setAppBadge?: unknown }).setAppBadge;
     }
+  });
+
+  it("application fermée : la notification nomme l'expéditeur relayé, sans aperçu", async () => {
+    // Aucun onglet pour déchiffrer — le cas nominal sur iOS.
+    const { gestionnaires, montrer } = chargerServiceWorker([]);
+
+    await declencher(gestionnaires, "push", {
+      data: {
+        json: () => ({
+          event_id: "$e1",
+          room_id: "!dm:t",
+          sender: "@alice:t",
+          sender_display_name: "Alice",
+        }),
+      },
+    });
+    expect(montrer).toHaveBeenCalledWith("Nouveau message de Alice", expect.objectContaining({ body: undefined }));
+
+    // Sans nom d'affichage, la partie locale de l'identifiant.
+    await declencher(gestionnaires, "push", {
+      data: { json: () => ({ event_id: "$e2", room_id: "!dm:t", sender: "@ana:t" }) },
+    });
+    expect(montrer).toHaveBeenLastCalledWith("Nouveau message de ana", expect.anything());
+  });
+
+  it("à l'ouverture, un push déjà actif réécrit son pusher dans le format courant", async () => {
+    // Les pushers enregistrés avant E-12 restent en `event_id_only` côté serveur : sans
+    // réécriture, les appareils déjà abonnés ne recevraient jamais l'expéditeur.
+    vi.stubGlobal("Notification", { permission: "granted", requestPermission: vi.fn(async () => "granted") });
+    const abonnement = {
+      endpoint: "https://push.example.org/abonnement-1",
+      toJSON: () => ({ keys: { p256dh: "cle-p256dh", auth: "cle-auth" } }),
+    };
+    Object.defineProperty(globalThis.navigator, "serviceWorker", {
+      value: Object.assign(new EventTarget(), {
+        ready: Promise.resolve({ pushManager: { getSubscription: vi.fn(async () => abonnement) } }),
+      }),
+      configurable: true,
+    });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ vapid_public_key: "BO_Q5R3h" })),
+    );
+
+    render(<PontNotifications />);
+
+    await waitFor(() => expect(poserPusher).toHaveBeenCalledTimes(1));
+    expect((poserPusher.mock.calls[0]![0] as { data: Record<string, unknown> }).data.format).toBeUndefined();
+  });
+
+  it("à l'ouverture, un push jamais activé ne demande rien", async () => {
+    render(<PontNotifications />);
+    await waitFor(() => expect(Notification.requestPermission).not.toHaveBeenCalled());
+    expect(poserPusher).not.toHaveBeenCalled();
   });
 
   it("le tap ouvre la conversation, sans doubler un onglet déjà ouvert", async () => {

@@ -14,8 +14,8 @@ Intégration des appels (shell autour du widget Element Call) et chaîne de noti
 - **REQ-UIX-39** — Entrée « Appel audio » des Friends interaction buttons (M-G) → même chemin que le header 1:1.
 
 ### Notifications
-- **REQ-UI-18** — Abonnement Web Push : clé VAPID récupérée (spec 03), permission demandée au bon moment (après le premier message reçu ou depuis les réglages — jamais au premier lancement) ; réveil SW → payload {event_id, room_id} → récupération et **déchiffrement local** → notification affichée (expéditeur + aperçu déchiffrés localement) ; tap → conversation. Sur refus de permission : état visible dans les réglages avec chemin de rattrapage.
-- **REQ-UIX-40** — Le SW de notification ne persiste rien : aucun contenu déchiffré en cache SW, aucun payload loggé (interdits CLAUDE.md) ; si le déchiffrement échoue (clés absentes), notification générique « Nouveau message » sans contenu, sans erreur bruyante.
+- **REQ-UI-18** — Abonnement Web Push : clé VAPID récupérée (spec 03), permission demandée au bon moment (après le premier message reçu ou depuis les réglages — jamais au premier lancement) ; réveil SW → payload {event_id, room_id, sender, sender_display_name} → récupération et **déchiffrement local** → notification affichée (expéditeur + aperçu déchiffrés localement **quand l'application est ouverte** ; sinon « Nouveau message de X », expéditeur relayé et aucun aperçu — amendé le 22/09/2026, arbitrage E-12) ; tap → conversation, et ouvrir une conversation ferme ses notifications et remet le badge au compte. Sur refus de permission : état visible dans les réglages avec chemin de rattrapage.
+- **REQ-UIX-40** — Le SW de notification ne persiste rien : aucun contenu déchiffré en cache SW, aucun payload loggé (interdits CLAUDE.md) ; si le déchiffrement échoue (clés absentes, application fermée), notification générique « Nouveau message » — « Nouveau message de X » quand le payload porte l'expéditeur — sans contenu, sans erreur bruyante.
 
 ## Contraintes
 

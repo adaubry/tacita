@@ -13,10 +13,20 @@ Documentées, jamais masquées (spec 00 — Honnêteté produit).
   lui, ne l'est pas — il arrive au `/sync` suivant. La notification est un
   confort, pas un canal de transport.
 - **La notification ne contient aucun texte.** Le payload transporte
-  `event_id` et `room_id` seulement (REQ-PSH-02) : le serveur ne voit jamais
-  de clair, donc il ne peut rien mettre dans la notification. L'aperçu affiché
+  `event_id`, `room_id` et l'expéditeur (`sender`, `sender_display_name`)
+  seulement (REQ-PSH-02, amendée E-12) : le serveur ne voit jamais de clair,
+  donc il ne peut mettre aucun aperçu dans la notification. L'aperçu affiché
   dépend du déchiffrement local au réveil du service worker ; s'il échoue
-  (clés absentes, appareil non vérifié), la notification reste générique.
+  (application fermée, clés absentes), la notification dit seulement de qui
+  vient le message.
+- **La passerelle reçoit l'événement complet de Synapse.** Depuis E-12, le
+  pusher n'est plus en `event_id_only` — ce format retirait aussi l'expéditeur,
+  et Synapse n'en a pas d'intermédiaire. La passerelle reçoit donc le contenu
+  **chiffré** de l'événement, le nom du salon et les compteurs. Elle ne relaie
+  au navigateur que les quatre champs ci-dessus, et ne journalise rien du corps
+  reçu (REQ-PSH-04). L'expéditeur relayé est une métadonnée que Synapse connaît
+  déjà ; le payload Web Push est chiffré pour l'appareil (RFC 8291), le push
+  service ne le lit pas.
 - **Métadonnées visibles par le push service.** Mozilla, Google ou Apple, selon
   le navigateur, voient l'endpoint sollicité et l'horodatage de chaque push —
   donc la fréquence et les moments d'activité, sans le contenu.

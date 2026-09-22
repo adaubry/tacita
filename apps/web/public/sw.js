@@ -67,10 +67,11 @@ self.addEventListener("fetch", (event) => {
 /*
  * REQ-UI-18 / REQ-UIX-40 — le réveil par notification.
  *
- * Le payload ne porte que `{event_id, room_id}` (REQ-PSH-02) : ce worker ne reçoit aucun
- * contenu, et n'a aucun moyen d'en produire seul — les clés Megolm vivent dans le magasin
- * crypto ouvert par l'onglet. Il demande donc l'aperçu à l'application (`lib/notifications.ts`)
- * et affiche « Nouveau message » quand personne ne peut répondre.
+ * Le payload porte `{event_id, room_id, sender, sender_display_name}` (REQ-PSH-02, amendée
+ * E-12) : ce worker ne reçoit aucun contenu, et n'a aucun moyen d'en produire seul — les clés
+ * Megolm vivent dans le magasin crypto ouvert par l'onglet. Il demande donc l'aperçu à
+ * l'application (`lib/notifications.ts`), et affiche « Nouveau message de X » quand personne
+ * ne peut répondre.
  *
  * Ce chemin **n'écrit rien** : ni cache, ni IndexedDB, ni journal. L'aperçu ne fait que
  * traverser, du port de message à `showNotification`.
@@ -91,10 +92,10 @@ self.addEventListener("push", (event) => {
   event.waitUntil(afficherNotification(payload));
 });
 
-async function afficherNotification({ event_id, room_id }) {
+async function afficherNotification({ event_id, room_id, sender, sender_display_name }) {
   const apercu = event_id && room_id ? await demanderApercu({ event_id, room_id }) : null;
 
-  await self.registration.showNotification(apercu ? apercu.titre : "Nouveau message", {
+  await self.registration.showNotification(apercu ? apercu.titre : titreDeRepli(sender, sender_display_name), {
     body: apercu ? apercu.corps : undefined,
     // Groupées par conversation : dix messages d'une même personne remplacent la
     // notification précédente au lieu d'empiler dix lignes.
@@ -105,6 +106,19 @@ async function afficherNotification({ event_id, room_id }) {
     data: { room_id },
   });
   await majBadge();
+}
+
+/**
+ * REQ-PSH-02 (amendée E-12) — quand personne ne peut déchiffrer (application fermée, cas
+ * nominal sur iOS), l'expéditeur relayé par la passerelle donne au moins « de qui ». Nom
+ * d'affichage d'abord, sinon la partie locale de l'identifiant (`@ana:serveur` → `ana`).
+ * Jamais de texte : il n'y en a pas dans le payload.
+ */
+function titreDeRepli(sender, nomAffiche) {
+  const nom =
+    (typeof nomAffiche === "string" && nomAffiche) ||
+    (typeof sender === "string" && sender.startsWith("@") ? sender.slice(1).split(":")[0] : "");
+  return nom ? `Nouveau message de ${nom}` : "Nouveau message";
 }
 
 /**

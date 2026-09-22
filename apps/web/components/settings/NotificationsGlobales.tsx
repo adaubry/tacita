@@ -60,9 +60,9 @@ export function NotificationsGlobales({ session }: { session: Session | null }) 
         d'un déchiffrement en panne, alors que c'est la limite annoncée.
       */}
       <Text type="supporting" color="secondary">
-        Quand l&apos;application est fermée, la notification affiche « Nouveau message »
-        sans expéditeur ni aperçu : le déchiffrement a besoin de l&apos;application
-        ouverte. Aucun contenu ne transite par le serveur de notifications.
+        Quand l&apos;application est fermée, la notification dit qui vous écrit, sans
+        aperçu du message : le déchiffrement a besoin de l&apos;application ouverte.
+        Aucun contenu ne transite par le serveur de notifications.
       </Text>
     </VStack>
   );

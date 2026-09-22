@@ -99,9 +99,10 @@ export async function activerPush(session: Session): Promise<EtatPush> {
    */
   const donnees = {
     url: URL_NOTIFY,
-    // REQ-PSH-02 — Synapse n'envoie alors que `event_id` et `room_id`. Le contenu ne
-    // quitte jamais l'appareil, et la passerelle n'a rien à ne pas journaliser.
-    format: "event_id_only",
+    // REQ-PSH-02 (amendée E-12) — **pas** de `format: "event_id_only"` : il retirait aussi
+    // l'expéditeur, seul repli possible quand l'app est fermée. Synapse envoie donc
+    // l'événement complet à la passerelle — contenu **chiffré**, jamais du clair — qui
+    // n'en relaie au navigateur que les identifiants et l'expéditeur.
     p256dh: cles.p256dh,
     auth: cles.auth,
   };

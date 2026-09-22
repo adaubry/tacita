@@ -97,13 +97,21 @@ describe("REQ-PSH-01 — endpoint /_matrix/push/v1/notify conforme", () => {
   });
 });
 
-describe("REQ-PSH-02 — le payload sortant ne porte que event_id et room_id", () => {
-  it("n'expose ni expéditeur, ni nom de salon, ni contenu", async () => {
+describe("REQ-PSH-02 — le payload sortant : les deux identifiants et l'expéditeur, rien d'autre", () => {
+  it("relaie l'expéditeur, jamais le nom de salon ni le contenu", async () => {
+    // Le fixture est un événement Synapse complet, contenu compris : c'est ce que reçoit
+    // la passerelle depuis que le pusher n'est plus en `event_id_only` (E-12).
     await postNotify(synapsePayload([device("https://push.example/ep1")]));
 
     const payload = JSON.parse(String(sendNotification.mock.calls[0]?.[1]));
-    expect(Object.keys(payload).sort()).toEqual(["event_id", "room_id"]);
-    expect(payload).toEqual({ event_id: "$evt:tacita.chat", room_id: "!room:tacita.chat" });
+    expect(Object.keys(payload).sort()).toEqual(["event_id", "room_id", "sender", "sender_display_name"]);
+    expect(payload).toEqual({
+      event_id: "$evt:tacita.chat",
+      room_id: "!room:tacita.chat",
+      sender: "@alice:tacita.chat",
+      sender_display_name: "Alice",
+    });
+    expect(JSON.stringify(payload)).not.toMatch(/rendez-vous|Vacances|body|content/);
   });
 });
 

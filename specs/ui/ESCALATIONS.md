@@ -482,6 +482,17 @@ pesée.
 **Ce que la décision touche.** `specs/11-ui-shard.md` et `specs/ui/M-I.md` (REQ-UI-18), et la
 phrase des réglages, qui suit la rédaction retenue.
 
+**Arbitré le 22/09/2026 (PM), sur retours testeurs iOS — voie A pour l'aperçu, plus
+l'expéditeur.** Les testeurs ont remonté « Nouveau message » seul comme un défaut : sur iOS,
+l'application fermée est le cas nominal. La décision n'est **pas** la voie B : aucun contenu ne
+traverse la passerelle vers le navigateur. Seule l'identité de l'expéditeur est ajoutée au
+payload — une métadonnée que Synapse connaît déjà en clair, dans un payload Web Push chiffré
+pour l'appareil (RFC 8291). La voie B telle qu'écrite plus haut surestimait ce coût en y
+rangeant l'expéditeur avec le contenu. Contrepartie consignée dans REQ-PSH-02 et
+`apps/push-gateway/LIMITES.md` : le pusher quitte `event_id_only`, la passerelle reçoit
+l'événement complet (contenu **chiffré**) et n'en relaie que quatre champs. Réalisé : REQ-PSH-02
+et M-I amendées, réglages réécrits (« dit qui vous écrit, sans aperçu »).
+
 ---
 
 ## Décisions prises en propre (design owner, pour information)

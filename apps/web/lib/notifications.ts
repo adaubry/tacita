@@ -5,10 +5,10 @@ import { mentionCandidates, messageText } from "@tacita/messaging";
  * REQ-UI-18 / REQ-UIX-40 — le pont entre le service worker réveillé par un push et la
  * seule chose capable de lire un message chiffré : l'application elle-même.
  *
- * Le payload ne porte que `{event_id, room_id}` (REQ-PSH-02). Le SW ne sait pas
- * déchiffrer — les clés Megolm vivent dans le magasin crypto du SDK, ouvert par l'onglet.
- * Il demande donc l'aperçu ici, et affiche « Nouveau message » quand personne ne peut
- * répondre. **Rien de ce qui transite par ce module n'est journalisé ni mis en cache**
+ * Le payload porte les identifiants et l'expéditeur, jamais de contenu (REQ-PSH-02,
+ * amendée E-12). Le SW ne sait pas déchiffrer — les clés Megolm vivent dans le magasin
+ * crypto du SDK, ouvert par l'onglet. Il demande donc l'aperçu ici, et affiche « Nouveau
+ * message de X » quand personne ne peut répondre. **Rien de ce qui transite par ce module n'est journalisé ni mis en cache**
  * (interdit n°8) : il n'y a pas un seul `console.` dans ce fichier, et c'est un test qui
  * le garde.
  */

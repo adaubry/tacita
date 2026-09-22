@@ -81,7 +81,6 @@ publique VAPID, par le proxy.
   "lang": "fr",
   "data": {
     "url": "http://push-gateway:8008/_matrix/push/v1/notify",
-    "format": "event_id_only",
     "p256dh": "<clé p256dh de la subscription>",
     "auth": "<clé auth de la subscription>"
   }

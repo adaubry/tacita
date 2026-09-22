@@ -40,8 +40,10 @@ pnpm --filter push-gateway start
 ## Contrat d'enregistrement du pusher (côté client, spec 11)
 
 `POST /_matrix/client/v3/pushers` avec `kind: "http"`, `pushkey` = l'endpoint
-Web Push, et dans `data` : `url` (celle de cette passerelle), `format:
-"event_id_only"`, plus les clés de la subscription :
+Web Push, et dans `data` : `url` (celle de cette passerelle) et les clés de la
+subscription. **Pas de `format: "event_id_only"`** (REQ-PSH-02, amendée E-12) : il
+retirait aussi l'expéditeur. La passerelle reçoit l'événement complet et n'en relaie
+que `event_id`, `room_id`, `sender` et `sender_display_name` :
 
 ```json
 {
@@ -50,7 +52,6 @@ Web Push, et dans `data` : `url` (celle de cette passerelle), `format:
   "pushkey": "https://push.services.mozilla.com/wpush/v2/...",
   "data": {
     "url": "https://push.tacita.chat/_matrix/push/v1/notify",
-    "format": "event_id_only",
     "p256dh": "<subscription.keys.p256dh>",
     "auth": "<subscription.keys.auth>"
   }
