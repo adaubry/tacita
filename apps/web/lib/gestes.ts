@@ -53,7 +53,18 @@ export function useGlissement({
   };
 
   return {
-    style: { touchAction: "pan-y" as const },
+    // `touchAction: pan-y` laisse le défilement vertical mais réserve l'horizontal au
+    // geste. `user-select`/`touch-callout` à `none` : sur iOS, un appui long sur une
+    // bulle déclenche sinon la sélection de texte native (surlignage bleu, façon Live
+    // Text) *en plus* du hold menu. On le coupe ici, au point unique par où passent
+    // tous les gestes (message, carte de conversation, bannière) — la copie reste
+    // offerte par « Copier » du hold menu, pas par la sélection native.
+    style: {
+      touchAction: "pan-y" as const,
+      userSelect: "none" as const,
+      WebkitUserSelect: "none" as const,
+      WebkitTouchCallout: "none" as const,
+    },
 
     onPointerDown(evenement: PointerEvent) {
       if (zoneMorteBord && evenement.clientX < ZONE_MORTE_BORD) {

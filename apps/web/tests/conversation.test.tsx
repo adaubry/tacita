@@ -230,6 +230,14 @@ describe("REQ-UI-09 — glissement droit : les heures, et la zone morte du bord"
     expect(onRevelerHeures).toHaveBeenCalledTimes(1);
   });
 
+  it("l'appui long n'entraîne pas la sélection de texte native d'iOS", () => {
+    rendreMessage();
+    // Sur iOS, un appui long sur la bulle sélectionnerait son texte (surlignage bleu,
+    // façon Live Text) *en plus* du hold menu. La copie passe par « Copier », pas par
+    // la sélection native.
+    expect(carteMessage().style.userSelect).toBe("none");
+  });
+
   it("un geste parti à moins de 20 px du bord ne fait rien", () => {
     const { onRevelerHeures, onRepondre } = rendreMessage();
     // Le retour arrière de Safari iOS a déjà capté ce geste : agir en plus ferait les
