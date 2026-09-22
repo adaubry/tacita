@@ -1,6 +1,6 @@
 import type { Session } from "@tacita/client-core";
 import { asSession } from "@tacita/client-core/testing";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -185,6 +185,45 @@ describe("REQ-UIX-06 — reprise de session, retour OIDC, déconnexion", () => {
     fireEvent.click(screen.getAllByText("Se déconnecter").at(-1)!);
     await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
     expect(rediriger).toHaveBeenCalled();
+  });
+
+  it("une reprise qui reste pendante ne bloque pas : au bout du délai, on peut réessayer", async () => {
+    vi.useFakeTimers();
+    try {
+      // Promesse qui ne se résout jamais : le cas iOS d'une connexion IndexedDB laissée
+      // pendante après suspension — ni `onsuccess`, ni `onerror`, jamais de `catch`.
+      restoreSession.mockReturnValue(new Promise<Session | null>(() => {}));
+      render(
+        <SessionProvider homeserverUrl={HOMESERVER} rediriger={rediriger}>
+          <RecoveryGate>
+            <p>Conversations</p>
+          </RecoveryGate>
+        </SessionProvider>,
+      );
+
+      // Avant le délai : rien n'est proposé, et surtout aucun renvoi OIDC silencieux.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(19_000);
+      });
+      expect(screen.queryByText("Réessayer")).toBeNull();
+
+      // Passé le délai : écran d'échec au lieu d'un squelette infini.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000);
+      });
+      expect(screen.getByText("Réessayer")).toBeTruthy();
+      expect(rediriger).not.toHaveBeenCalled();
+
+      // « Réessayer » rejoue la reprise ; cette fois elle aboutit, l'app se rend.
+      restoreSession.mockResolvedValue(fausseSession().session);
+      await act(async () => {
+        fireEvent.click(screen.getByText("Réessayer"));
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByText("Conversations")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

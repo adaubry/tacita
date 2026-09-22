@@ -1,9 +1,18 @@
 "use client";
 
 import { initSession, restoreSession, type Session } from "@tacita/client-core";
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { etatDe, retirerJetonDeLUrl, urlConnexion, type EtatSession } from "../../lib/session";
+
+/**
+ * Filet de sécurité : au-delà de ce délai sans que la reprise ait abouti ni échoué, on
+ * bascule en `echec`. iOS peut laisser une connexion IndexedDB pendante après avoir
+ * suspendu la PWA — la promesse ne se résout alors jamais, et sans ce garde l'écran de
+ * chargement tournerait à l'infini (aucune branche d'erreur n'est atteinte). Généreux
+ * pour ne pas déclencher sur un premier `/sync` lent, court pour rester secourable.
+ */
+const DELAI_CHARGEMENT_MAX_MS = 20_000;
 
 interface Contexte {
   etat: EtatSession;
@@ -11,12 +20,15 @@ interface Contexte {
   recuperationConfirmee: () => void;
   /** REQ-UIX-06 — wipe complet (REQ-COR-10), après confirmation explicite. */
   deconnecter: (session: Session) => Promise<void>;
+  /** Relance la reprise de session depuis l'écran d'échec. */
+  reessayer: () => void;
 }
 
 const ContexteSession = createContext<Contexte>({
   etat: { phase: "chargement" },
   recuperationConfirmee: () => {},
   deconnecter: async () => {},
+  reessayer: () => {},
 });
 
 export const useSession = () => useContext(ContexteSession);
@@ -49,8 +61,30 @@ export function SessionProvider({ children, homeserverUrl, rediriger }: SessionP
     aller(urlConnexion(homeserverUrl, globalThis.location.origin));
   }, [homeserverUrl, rediriger]);
 
-  useEffect(() => {
-    let annule = false;
+  // Une reprise en cours est identifiée par sa génération : le watchdog, le démontage et
+  // un « Réessayer » l'invalident tous en l'incrémentant, ce qui neutralise une promesse
+  // qui se résoudrait après coup (le cas iOS : IndexedDB qui répond très tard, ou jamais).
+  const generation = useRef(0);
+
+  const charger = useCallback(() => {
+    const gen = ++generation.current;
+    const valide = () => gen === generation.current;
+    setEtat({ phase: "chargement" });
+
+    const watchdog = setTimeout(() => {
+      // Ni abouti ni rejeté à temps : on abandonne cette tentative (incrément) et on
+      // rend la main à l'utilisateur au lieu de tourner indéfiniment.
+      if (valide()) {
+        generation.current += 1;
+        setEtat({ phase: "echec" });
+      }
+    }, DELAI_CHARGEMENT_MAX_MS);
+
+    const terminer = (suite: EtatSession) => {
+      if (!valide()) return;
+      clearTimeout(watchdog);
+      setEtat(suite);
+    };
 
     void (async () => {
       try {
@@ -59,28 +93,32 @@ export function SessionProvider({ children, homeserverUrl, rediriger }: SessionP
           ? await initSession({ homeserverUrl, loginToken: jeton })
           : await restoreSession({ homeserverUrl });
 
-        if (annule) return;
+        if (!valide()) return;
         if (!session) {
-          setEtat({ phase: "hors-session" });
+          terminer({ phase: "hors-session" });
           versOidc();
           return;
         }
-        setEtat(await etatDe(session));
+        terminer(await etatDe(session));
       } catch {
         // Jeton révoqué, crypto indisponible, réseau absent au premier appel : dans tous
         // les cas l'entrée passe par l'OIDC. Rien n'est journalisé — un message d'erreur
         // de connexion peut porter le jeton.
-        if (!annule) {
-          setEtat({ phase: "hors-session" });
-          versOidc();
-        }
+        if (!valide()) return;
+        terminer({ phase: "hors-session" });
+        versOidc();
       }
     })();
-
-    return () => {
-      annule = true;
-    };
   }, [homeserverUrl, versOidc]);
+
+  useEffect(() => {
+    charger();
+    // Au démontage, on invalide la tentative en cours : sa résolution tardive ne doit
+    // pas toucher l'état d'un provider qui n'existe plus.
+    return () => {
+      generation.current += 1;
+    };
+  }, [charger]);
 
   const recuperationConfirmee = useCallback(() => {
     setEtat((precedent) =>
@@ -100,7 +138,7 @@ export function SessionProvider({ children, homeserverUrl, rediriger }: SessionP
   );
 
   return (
-    <ContexteSession.Provider value={{ etat, recuperationConfirmee, deconnecter }}>
+    <ContexteSession.Provider value={{ etat, recuperationConfirmee, deconnecter, reessayer: charger }}>
       {children}
     </ContexteSession.Provider>
   );

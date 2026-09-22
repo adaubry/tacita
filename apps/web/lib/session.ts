@@ -6,6 +6,13 @@ import type { Session } from "@tacita/client-core";
  */
 export type EtatSession =
   | { phase: "chargement" }
+  /**
+   * La reprise de session n'a ni abouti ni échoué dans le délai imparti — typiquement
+   * une connexion IndexedDB qu'iOS a laissée pendante après une suspension de la PWA
+   * (ni `onsuccess`, ni `onerror`). L'écran de chargement ne doit jamais rester bloqué :
+   * on propose de réessayer plutôt que de tourner à l'infini.
+   */
+  | { phase: "echec" }
   /** Aucune session restaurable : REQ-UIX-06 renvoie à l'OIDC, sans écran intermédiaire. */
   | { phase: "hors-session" }
   /** REQ-COR-06 / REQ-UI-04 — la clé de récupération n'est pas configurée. Bloquant. */

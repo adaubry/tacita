@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 
 import { Placeholder } from "../foundation/Placeholder";
-import { Skeleton, VStack } from "../foundation/primitives";
+import { Button, Skeleton, VStack } from "../foundation/primitives";
 import { RecoveryStep } from "./RecoveryStep";
 import { useSession } from "./SessionProvider";
 
@@ -16,7 +16,20 @@ import { useSession } from "./SessionProvider";
  * « ni sautée, ni différée, ni contournée par URL directe » veut dire concrètement.
  */
 export function RecoveryGate({ children }: { children: ReactNode }) {
-  const { etat } = useSession();
+  const { etat, reessayer } = useSession();
+
+  if (etat.phase === "echec") {
+    // Le chargement a dépassé son délai sans aboutir (typiquement IndexedDB laissé
+    // pendant par iOS après suspension) : on ne reste jamais bloqué, on propose de
+    // relancer la reprise — ce qui rouvre les bases et rejoue la crypto.
+    return (
+      <Placeholder
+        titre="Chargement interrompu"
+        explication="Tacita n'a pas réussi à rouvrir votre session. Cela arrive parfois quand l'app est restée en arrière-plan."
+        action={<Button label="Réessayer" variant="primary" onClick={reessayer} />}
+      />
+    );
+  }
 
   if (etat.phase === "chargement") {
     // DESIGN.md : pas de spinner plein écran. Une géométrie d'attente, localisée.
