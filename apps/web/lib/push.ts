@@ -298,7 +298,12 @@ export async function brancherPush(session: Session): Promise<DiagnosticPush> {
     // l'enregistrer serait enregistrer une panne.
     if (!keys?.p256dh || !keys.auth) return { ...echec(), abonnement: false };
 
-    const deja = pushers.some((pusher) => pusher.pushkey === endpoint && pusher.app_id === APP_ID);
+    // Un pusher encore en `event_id_only` compte comme absent : ce format retire aussi
+    // l'expéditeur, et le réécrire ici suffit à migrer les appareils déjà abonnés.
+    const deja = pushers.some(
+      (pusher) =>
+        pusher.pushkey === endpoint && pusher.app_id === APP_ID && pusher.data.format !== "event_id_only",
+    );
     if (deja) return { etat: "abonne", permission: true, abonnement: true, pusher: true };
 
     await session.client.setPusher({
@@ -311,14 +316,15 @@ export async function brancherPush(session: Session): Promise<DiagnosticPush> {
       // La spec Matrix laisse `data` libre ; le type du SDK ne connaît que `url`, `format`
       // et `brand`. Les clés de la subscription y sont indispensables — c'est là que la
       // passerelle les relit, et sans elles aucun push ne peut être chiffré.
+      // **Pas** de `format: "event_id_only"` : il retire aussi l'expéditeur, seul repli
+      // possible quand l'app est fermée. Synapse envoie donc l'événement complet à la
+      // passerelle — contenu **chiffré**, jamais du clair — qui n'en relaie au navigateur
+      // que les identifiants et l'expéditeur.
       data: {
         url: PUSH_NOTIFY_URL,
-        // le format que la passerelle relaie : jamais de contenu, seulement
-        // de quoi réveiller ce navigateur.
-        format: "event_id_only",
         p256dh: keys.p256dh,
         auth: keys.auth,
-      } as { url: string; format: string },
+      } as { url: string },
       append: false,
     });
 
