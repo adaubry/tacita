@@ -16,9 +16,10 @@ import { SegmentedControl, SegmentedControlItem, Skeleton } from "../components/
  */
 const chemin = vi.fn(() => "/");
 const retour = vi.fn();
+const pousser = vi.fn();
 vi.mock("next/navigation", () => ({
   usePathname: () => chemin(),
-  useRouter: () => ({ back: retour, push: vi.fn() }),
+  useRouter: () => ({ back: retour, push: pousser }),
 }));
 
 afterEach(() => {
@@ -78,9 +79,27 @@ describe("REQ-UIX-02 — header : titre centré, retour par l'historique", () =>
   });
 
   it("le retour suit l'historique, jamais une route codée en dur", () => {
+    // Une entrée précédente existe : on est arrivé ici depuis un autre écran de l'app.
+    globalThis.history.pushState(null, "", "/c/!groupe:t");
     render(<LayoutHeader titre="Conversation" />);
     fireEvent.click(screen.getByLabelText("Retour"));
     expect(retour).toHaveBeenCalledTimes(1);
+    expect(pousser).not.toHaveBeenCalled();
+  });
+
+  it("sans historique, le retour ramène à l'accueil au lieu de ne rien faire", () => {
+    // Conversation ouverte depuis une notification, ou URL restaurée par iOS à la
+    // relance : première entrée d'historique, et en PWA standalone aucun bouton de
+    // navigateur. Un `back()` muet laisserait l'utilisateur coincé dans l'écran.
+    const longueur = vi.spyOn(globalThis.history, "length", "get").mockReturnValue(1);
+    try {
+      render(<LayoutHeader titre="Conversation" />);
+      fireEvent.click(screen.getByLabelText("Retour"));
+      expect(retour).not.toHaveBeenCalled();
+      expect(pousser).toHaveBeenCalledWith("/");
+    } finally {
+      longueur.mockRestore();
+    }
   });
 
   it("les layouts sans pile n'ont pas de retour", () => {

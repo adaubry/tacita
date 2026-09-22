@@ -34,7 +34,11 @@ export function LayoutHeader({ titre, fin, retour = true }: LayoutHeaderProps) {
             variant="ghost"
             isIconOnly
             icon={<Icon icon="chevronLeft" />}
-            onClick={() => router.back()}
+            // Sans entrée précédente — conversation ouverte depuis une notification, ou
+            // URL restaurée par iOS à la relance de la PWA — `back()` ne fait rien, et en
+            // mode standalone il n'y a aucun bouton de navigateur pour s'en sortir. Seul
+            // ce cas retombe sur l'accueil : dès qu'un historique existe, il fait foi.
+            onClick={() => (globalThis.history.length > 1 ? router.back() : router.push("/"))}
           />
         ) : undefined
       }
