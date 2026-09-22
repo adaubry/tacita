@@ -411,11 +411,24 @@ describe("REQ-UIX-35 — fond d'écran : aperçu, application sur cet appareil, 
   it("le voile de lisibilité est le token de DESIGN.md, pas une valeur en dur", () => {
     // La timeline (M-D) et l'aperçu doivent poser exactement le même voile : un aperçu
     // plus clément que la timeline ment sur ce qu'on est en train de choisir.
-    for (const chemin of ["components/settings/ThemeConversation.tsx", "components/conversation/Timeline.tsx"]) {
+    for (const chemin of ["components/settings/ThemeConversation.tsx", "components/conversation/Conversation.tsx"]) {
       const source = sansCommentaires(
         sourcesLivrees().find((fichier) => fichier.chemin.endsWith(chemin))!.code,
       );
       expect(source).toMatch(/var\(--tacita-scrim\)/);
+    }
+  });
+
+  it("le fond reste fixe derrière la conversation, il ne défile pas avec les messages", () => {
+    // Posé en `background` sur la colonne des messages, il montait avec eux et sortait
+    // de l'écran. Il vit sur un calque `position: fixed`, et `background-attachment`
+    // n'est pas une option : Safari iOS ignore `fixed`, et `local` le fait défiler.
+    const source = (chemin: string) =>
+      sansCommentaires(sourcesLivrees().find((fichier) => fichier.chemin.endsWith(chemin))!.code);
+
+    expect(source("components/conversation/Conversation.tsx")).toMatch(/position: "fixed"/);
+    for (const chemin of ["components/conversation/Conversation.tsx", "components/conversation/Timeline.tsx"]) {
+      expect(source(chemin)).not.toMatch(/backgroundAttachment|background-attachment/);
     }
   });
 });

@@ -298,7 +298,30 @@ export function Conversation({ roomId }: { roomId: string }) {
   );
 
   return (
-    <>
+    // `isolation: isolate` crée le contexte d'empilement dans lequel le calque du fond
+    // (z-index −1) se range **derrière** l'en-tête, la timeline et le composer, sans
+    // pouvoir passer sous le fond opaque d'un ancêtre ni recouvrir l'en-tête.
+    <div style={{ isolation: "isolate" }}>
+      {/* REQ-UIX-35 — le fond d'écran, sur un calque **fixe** : posé sur la colonne des
+          messages, il défilait avec eux et finissait par sortir de l'écran. Pas de
+          `background-attachment: fixed`, que Safari iOS ignore. Le voile (`scrim`,
+          DESIGN.md) est au-dessus de l'image, sous le texte : c'est lui qui garantit la
+          lisibilité quel que soit le fond choisi. */}
+      {fondEcran && (
+        <div
+          aria-hidden
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: -1,
+            pointerEvents: "none",
+            backgroundImage: `linear-gradient(var(--tacita-scrim), var(--tacita-scrim)), url(${fondEcran})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        />
+      )}
+
       <LayoutHeader
         titre={salon?.name ?? "Conversation"}
         fin={
@@ -323,7 +346,6 @@ export function Conversation({ roomId }: { roomId: string }) {
       <Timeline
         messages={messages}
         chargement={!pret}
-        fondEcran={fondEcran}
         starter={
           <ConversationStarter
             nom={salon?.name ?? ""}
@@ -421,6 +443,6 @@ export function Conversation({ roomId }: { roomId: string }) {
         }}
         onEpingler={() => holdSur?.eventId && epingler(holdSur.eventId)}
       />
-    </>
+    </div>
   );
 }
