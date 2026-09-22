@@ -1,10 +1,13 @@
 "use client";
 
 import { onSessionInvalidee, restoreSession, type Session } from "@tacita/client-core";
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ecrireOnboardingEnCours } from "../../lib/preferences";
 import { etatDe, type EtatSession } from "../../lib/session";
+
+/** Au-delà, la reprise n'a ni abouti ni échoué : on propose de réessayer. */
+const DELAI_CHARGEMENT_MAX_MS = 20_000;
 
 interface Contexte {
   etat: EtatSession;
@@ -26,6 +29,8 @@ interface Contexte {
    * parle au réseau ; le provider ne fait que router l'état qui en sort.
    */
   sessionOuverte: (session: Session) => void;
+  /** Relance la reprise de session depuis l'écran d'échec. */
+  reessayer: () => void;
 }
 
 const ContexteSession = createContext<Contexte>({
@@ -34,6 +39,7 @@ const ContexteSession = createContext<Contexte>({
   onboardingTermine: () => {},
   deconnecter: async () => {},
   sessionOuverte: () => {},
+  reessayer: () => {},
 });
 
 export const useSession = () => useContext(ContexteSession);
@@ -63,32 +69,45 @@ export function SessionProvider({ children, homeserverUrl, indexedDB }: SessionP
   const [etat, setEtat] = useState<EtatSession>({ phase: "chargement" });
   const base = indexedDB ?? globalThis.indexedDB;
 
-  useEffect(() => {
-    let annule = false;
+  // Une reprise est identifiée par sa génération : le watchdog, le démontage et « Réessayer »
+  // l'invalident en l'incrémentant, ce qui neutralise une promesse résolue après coup.
+  const generation = useRef(0);
+
+  const charger = useCallback(() => {
+    const gen = ++generation.current;
+    setEtat({ phase: "chargement" });
+
+    // Filet de sécurité : iOS peut laisser une connexion IndexedDB pendante après avoir
+    // suspendu la PWA — ni succès ni erreur, et l'écran de chargement tournait à l'infini.
+    const watchdog = setTimeout(() => terminer({ phase: "echec" }), DELAI_CHARGEMENT_MAX_MS);
+
+    function terminer(suite: EtatSession) {
+      if (gen !== generation.current) return;
+      generation.current += 1;
+      clearTimeout(watchdog);
+      setEtat(suite);
+    }
 
     void (async () => {
       try {
         const session = await restoreSession({ homeserverUrl, indexedDB: base });
-
-        if (annule) return;
-        if (!session) {
-          // plus de redirection : la porte rend le formulaire.
-          setEtat({ phase: "hors-session" });
-          return;
-        }
-        setEtat(await etatDe(session, base));
+        // plus de redirection : sans session, la porte rend le formulaire.
+        terminer(session ? await etatDe(session, base) : { phase: "hors-session" });
       } catch {
         // Jeton révoqué, crypto indisponible, réseau absent au premier appel : dans tous
         // les cas l'entrée repasse par le formulaire. Rien n'est journalisé — un message
         // d'erreur de connexion peut porter l'identifiant.
-        if (!annule) setEtat({ phase: "hors-session" });
+        terminer({ phase: "hors-session" });
       }
     })();
-
-    return () => {
-      annule = true;
-    };
   }, [homeserverUrl, base]);
+
+  useEffect(() => {
+    charger();
+    return () => {
+      generation.current += 1;
+    };
+  }, [charger]);
 
   /*
    * un jeton que le serveur refuse ne doit pas survivre à l'écran.
@@ -166,7 +185,7 @@ export function SessionProvider({ children, homeserverUrl, indexedDB }: SessionP
 
   return (
     <ContexteSession.Provider
-      value={{ etat, recuperationConfirmee, onboardingTermine, deconnecter, sessionOuverte }}
+      value={{ etat, recuperationConfirmee, onboardingTermine, deconnecter, sessionOuverte, reessayer: charger }}
     >
       {children}
     </ContexteSession.Provider>

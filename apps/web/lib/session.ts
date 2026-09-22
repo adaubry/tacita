@@ -8,6 +8,11 @@ import { lireOnboardingEnCours } from "./preferences";
  */
 export type EtatSession =
   | { phase: "chargement" }
+  /**
+   * La reprise n'a ni abouti ni échoué dans le délai — typiquement une connexion IndexedDB
+   * qu'iOS a laissée pendante après avoir suspendu la PWA. On propose de réessayer.
+   */
+  | { phase: "echec" }
   /** Aucune session restaurable : renvoie à l'OIDC, sans écran intermédiaire. */
   | { phase: "hors-session" }
   /**

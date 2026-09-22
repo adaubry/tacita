@@ -1,6 +1,6 @@
 import type { RecoveryState, Session } from "@tacita/client-core";
 import { asSession } from "@tacita/client-core/testing";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -290,6 +290,35 @@ describe("reprise de session, connexion, déconnexion", () => {
     // Le message d'erreur du SDK peut porter l'identifiant : il ne sort jamais.
     expect(journal).not.toHaveBeenCalled();
     journal.mockRestore();
+  });
+
+  it("une reprise qui reste pendante ne bloque pas : au bout du délai, on peut réessayer", async () => {
+    // Seul `setTimeout` est simulé : fake-indexeddb, que `etatDe` traverse, a besoin des autres.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      // Le cas iOS : une connexion IndexedDB laissée pendante après suspension — la
+      // promesse ne se résout ni ne rejette, et aucune branche d'erreur n'est atteinte.
+      restoreSession.mockReturnValue(new Promise<Session | null>(() => {}));
+      render(
+        <SessionProvider homeserverUrl={HOMESERVER} indexedDB={new IDBFactory()}>
+          <RecoveryGate>
+            <p>Conversations</p>
+          </RecoveryGate>
+        </SessionProvider>,
+      );
+
+      await act(() => vi.advanceTimersByTimeAsync(19_000));
+      expect(screen.queryByText("Réessayer")).toBeNull();
+
+      await act(() => vi.advanceTimersByTimeAsync(2_000));
+      expect(screen.getByText("Réessayer")).toBeTruthy();
+
+      restoreSession.mockResolvedValue(fausseSession().session);
+      fireEvent.click(screen.getByText("Réessayer"));
+    } finally {
+      vi.useRealTimers();
+    }
+    await waitFor(() => expect(screen.getByText("Conversations")).toBeTruthy());
   });
 
   it("la déconnexion n'efface qu'après confirmation, et dit ce qu'elle efface", async () => {
