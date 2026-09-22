@@ -70,6 +70,26 @@ export function apercuLocal(session: Session, roomId: string, eventId?: string):
  *
  * `standalone` sur `navigator` est une extension Safari, absente du type standard.
  */
+/**
+ * Ferme les notifications d'une conversation qu'on regarde, et remet le badge au compte.
+ * Sans ça, elles s'empilaient dans le centre de notifications d'iOS même après lecture.
+ *
+ * Le `tag` de chaque notification **est** son `roomId` (`public/sw.js`) : c'est ce qui
+ * permet de ne fermer que celles de ce salon. Même règle de badge que le worker —
+ * conversations en attente, pas messages non lus. `getRegistration` et non `ready` : sans
+ * worker enregistré (développement), `ready` ne résoudrait jamais.
+ */
+export async function effacerNotifications(roomId: string): Promise<void> {
+  const registration = await navigator.serviceWorker?.getRegistration();
+  if (!registration) return;
+
+  for (const notification of await registration.getNotifications({ tag: roomId })) {
+    notification.close();
+  }
+  const restantes = (await registration.getNotifications()).length;
+  await (restantes > 0 ? navigator.setAppBadge?.(restantes) : navigator.clearAppBadge?.());
+}
+
 export const estIOS = (userAgent: string) =>
   /iPad|iPhone|iPod/.test(userAgent) ||
   // iPadOS 13+ se présente comme un Macintosh dès qu'il est en « site pour ordinateur »,

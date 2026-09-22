@@ -226,6 +226,27 @@ function optionsNotification(roomId, eventId, apercu) {
   };
 }
 
+/**
+ * Le badge de l'icône suit les notifications affichées : il monte avec elles et retombe
+ * quand on les ferme (tap ici, ouverture de la conversation côté app, `lib/push.ts`).
+ *
+ * ponytail: compte les conversations qui ont une notification en attente, pas les
+ * messages non lus — le payload ne porte pas le compteur de Synapse. Relayer
+ * `counts.unread` le jour où le nombre exact compte.
+ *
+ * Un badge qui échoue ne doit jamais empêcher la notification : erreurs avalées.
+ */
+function majBadge() {
+  const navigateur = self.navigator;
+  if (!navigateur || !navigateur.setAppBadge) return Promise.resolve();
+  return self.registration
+    .getNotifications()
+    .then((affichees) =>
+      affichees.length > 0 ? navigateur.setAppBadge(affichees.length) : navigateur.clearAppBadge(),
+    )
+    .catch(() => {});
+}
+
 self.addEventListener("push", (event) => {
   let charge = null;
   try {
@@ -249,7 +270,9 @@ self.addEventListener("push", (event) => {
      * vrai que le silence.
      */
     event.waitUntil(
-      self.registration.showNotification("Nouveau message", optionsNotification("tacita", undefined, null)),
+      self.registration
+        .showNotification("Nouveau message", optionsNotification("tacita", undefined, null))
+        .then(majBadge),
     );
     return;
   }
@@ -264,12 +287,14 @@ self.addEventListener("push", (event) => {
           apercu ? apercu.expediteur : "Nouveau message",
           optionsNotification(roomId, charge.event_id, apercu),
         ),
-      ),
+      )
+      .then(majBadge),
   );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  event.waitUntil(majBadge());
   const roomId = event.notification.data && event.notification.data.roomId;
   if (!roomId) return;
 

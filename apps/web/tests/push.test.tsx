@@ -14,7 +14,13 @@ import { PushNotifications } from "../components/notifications/PushNotifications
 import { NotificationsPush } from "../components/settings/NotificationsPush";
 import { SessionProvider } from "../components/onboarding/SessionProvider";
 import { PUSH_CONFIG_URL, PUSH_NOTIFY_URL } from "../lib/config";
-import { apercuLocal, brancherPush, demanderEtBrancher, TYPE_APERCU } from "../lib/push";
+import {
+  apercuLocal,
+  brancherPush,
+  demanderEtBrancher,
+  effacerNotifications,
+  TYPE_APERCU,
+} from "../lib/push";
 import { lire } from "./sources";
 import { routeConversation } from "../lib/routes";
 
@@ -493,6 +499,12 @@ function chargerServiceWorker() {
         notifications.push({ titre, options });
         return Promise.resolve();
       },
+      // Les notifications réellement affichées : c'est ce que le badge compte.
+      getNotifications: () => Promise.resolve(notifications),
+    },
+    navigator: {
+      setAppBadge: vi.fn((_n: number) => Promise.resolve()),
+      clearAppBadge: vi.fn(() => Promise.resolve()),
     },
     clients: {
       claim: vi.fn(),
@@ -617,6 +629,46 @@ describe("le service worker n'écrit rien, ne journalise rien, ne devine rien", 
     await pousser(sw, { event_id: EVENEMENT });
     expect(sw.notifications).toHaveLength(1);
     expect(sw.notifications[0]!.titre).toBe("Nouveau message");
+  });
+
+  it("le badge suit les notifications : il monte au push, retombe au tap", async () => {
+    const sw = chargerServiceWorker();
+    sw.fenetresOuvertes([]);
+
+    await pousser(sw, { event_id: EVENEMENT, room_id: SALON });
+    expect(sw.self.navigator.setAppBadge).toHaveBeenCalledWith(1);
+
+    // Tap : la notification se ferme, plus rien en attente, le badge s'efface.
+    sw.notifications.length = 0;
+    let attente: Promise<unknown> = Promise.resolve();
+    sw.handlers.get("notificationclick")!({
+      notification: { close: vi.fn(), data: { roomId: SALON } },
+      waitUntil: (promesse: Promise<unknown>) => (attente = Promise.all([attente, promesse])),
+    });
+    await attente;
+    expect(sw.self.navigator.clearAppBadge).toHaveBeenCalled();
+  });
+
+  it("ouvrir une conversation ferme ses notifications, et seulement les siennes", async () => {
+    const duSalon = { close: vi.fn() };
+    const dAilleurs = { close: vi.fn() };
+    const getNotifications = vi.fn((filtre?: { tag?: string }) =>
+      Promise.resolve(filtre?.tag === SALON ? [duSalon] : [dAilleurs]),
+    );
+    const setAppBadge = vi.fn(() => Promise.resolve());
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      serviceWorker: { getRegistration: () => Promise.resolve({ getNotifications }) },
+      setAppBadge,
+    });
+
+    await effacerNotifications(SALON);
+
+    expect(duSalon.close).toHaveBeenCalled();
+    expect(dAilleurs.close).not.toHaveBeenCalled();
+    // Il reste la notification de l'autre conversation : le badge le dit.
+    expect(setAppBadge).toHaveBeenCalledWith(1);
+    vi.unstubAllGlobals();
   });
 
   it("prend la main dès son installation, sans attendre la fermeture des onglets", () => {
