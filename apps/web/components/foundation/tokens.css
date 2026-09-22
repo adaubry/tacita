@@ -34,8 +34,10 @@
 
   /* Voile de lisibilité sur fond d'écran personnalisé. **Clair** en thème clair : ce
      n'est pas un fond de modale, c'est ce qui rend le texte lisible par-dessus une
-     image choisie par l'utilisateur. */
-  --tacita-scrim: light-dark(#ffffffb3, #13151499);
+     image choisie par l'utilisateur. Blanc à 40 % : à 70 %, l'image devenait
+     méconnaissable (perçue comme « floutée »). Un fond très clair et chargé reste le cas
+     limite de lisibilité. */
+  --tacita-scrim: light-dark(#ffffff66, #13151499);
 
   /* Le bouton de retour du profil, seul verre de l'app (DESIGN.md § Colors, exception
      nommée du 10/08/2026). Deux couches indissociables, et c'est pour ça que c'est un
