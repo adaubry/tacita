@@ -226,6 +226,18 @@
 }
 
 /*
+ * tout élément qui porte un geste (`useGlissement`) : message, carte de conversation,
+ * bannière. Sur iOS, l'appui long qui ouvre le hold menu déclenchait **aussi** la
+ * sélection de texte native — surlignage bleu façon Live Text. La copie reste offerte par
+ * « Copier » du hold menu. `-webkit-user-select` : Safari ne lit pas encore la forme nue.
+ */
+.tacita-geste {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/*
  * la taille des icônes de la navbar. Les quatre SVG portent `width`/`height`
  * à 24 dans `icons.tsx`, parce que trois autres écrans les rendent à cette taille-là ;
  * une règle CSS bat l'attribut de présentation, et seule la navbar les grossit.
