@@ -31,7 +31,7 @@ Neutres à très léger sous-ton vert (invisible consciemment, cohérent avec l'
 | `danger` | #B3352C | #E5716A | supprimer, refuser, quitter, bloquer |
 | `warning` | #9A6A00 | #D9A441 | avertissements (limites connues) |
 | `highlight` | #155E4D à 14 %, texte `text` | #4FBD96 à 22 %, texte `text` | occurrences de recherche, `@me` |
-| `scrim` | #FFFFFF à 70 % | #131514 à 60 % | voile de lisibilité sur fond d'écran personnalisé |
+| `scrim` | #FFFFFF à 40 % | #131514 à 60 % | voile de lisibilité sur fond d'écran personnalisé |
 
 Règles : l'accent occupe moins de 5 % de tout écran courant — s'il devient ambiant, c'est un bug de design ; `danger` jamais pour de l'emphase non destructive ; badges de non-lus en `text` sur `accent-soft` (pas de pastille rouge, cf. PRODUCT.md) ; contraste AA vérifié pour chaque paire ; aucune autre couleur n'existe.
 

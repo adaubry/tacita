@@ -17,7 +17,7 @@
   /* Voile de lisibilité sur fond d'écran personnalisé. **Clair** en thème clair : ce
      n'est pas un fond de modale, c'est ce qui rend le texte lisible par-dessus une
      image choisie par l'utilisateur. */
-  --tacita-scrim: light-dark(#ffffffb3, #13151499);
+  --tacita-scrim: light-dark(#ffffff66, #13151499);
 
   /* DESIGN.md : avatars en **carré arrondi (rayon 25 %)**, signature délibérée face aux
      cercles de toutes les messageries. Astryx n'a pas de token d'avatar — ses avatars
