@@ -54,6 +54,31 @@ export function apercuDuPush(session: Session, payload: PayloadPush): ApercuNoti
 }
 
 /**
+ * Ferme les notifications d'une conversation qu'on regarde, et remet le badge au compte.
+ * Sans ça, elles s'empilaient dans le centre de notifications d'iOS même après lecture.
+ *
+ * Le tag de chaque notification **est** son `room_id` (`public/sw.js`) : c'est ce qui
+ * permet de ne fermer que celles de ce salon. Même règle de badge que le worker —
+ * conversations en attente, pas messages non lus.
+ *
+ * `getRegistration` et non `ready` : hors production aucun worker n'est enregistré, et
+ * `ready` ne résoudrait jamais. Tout échec est silencieux — c'est du ménage d'affichage.
+ */
+export async function effacerNotifications(roomId: string): Promise<void> {
+  const navigateur = globalThis.navigator as
+    | (Navigator & { setAppBadge?(n: number): Promise<void>; clearAppBadge?(): Promise<void> })
+    | undefined;
+  const registration = await navigateur?.serviceWorker?.getRegistration?.();
+  if (!registration?.getNotifications) return;
+
+  for (const notification of await registration.getNotifications({ tag: roomId })) {
+    notification.close();
+  }
+  const restantes = await registration.getNotifications();
+  await (restantes.length > 0 ? navigateur?.setAppBadge?.(restantes.length) : navigateur?.clearAppBadge?.());
+}
+
+/**
  * Écoute les demandes du service worker et y répond. Branché une fois la session prête,
  * pour toute la durée de vie de l'onglet.
  *

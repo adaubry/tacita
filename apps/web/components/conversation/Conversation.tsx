@@ -30,6 +30,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { environnementMedia } from "../../lib/media-env";
 import { brancherModeMasque } from "../../lib/mode-masque";
+import { effacerNotifications } from "../../lib/notifications";
 import { lireFondEcran } from "../../lib/preferences";
 import { videoTranscodable } from "../../lib/transcode-video";
 import { BandeauAppel } from "../appel/BandeauAppel";
@@ -90,6 +91,18 @@ export function Conversation({ roomId }: { roomId: string }) {
   }, []);
 
   const rafraichir = useCallback(() => setVersion((v) => v + 1), []);
+
+  // Ouvrir une conversation efface ses notifications et remet le badge au compte. Aussi
+  // au retour au premier plan : sur iOS on déverrouille souvent sur une conversation
+  // déjà ouverte, qui ne se remonte pas, alors que des notifications y sont arrivées.
+  useEffect(() => {
+    const effacer = () => {
+      if (document.visibilityState === "visible") void effacerNotifications(roomId).catch(() => {});
+    };
+    effacer();
+    document.addEventListener("visibilitychange", effacer);
+    return () => document.removeEventListener("visibilitychange", effacer);
+  }, [roomId]);
 
   /**
    * REQ-UIX-35 — le fond d'écran choisi pour ce salon (M-H), lu sur cet appareil.

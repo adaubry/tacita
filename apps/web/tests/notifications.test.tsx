@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { InvitePush } from "../components/notifications/InvitePush";
 import { NotificationsGlobales } from "../components/settings/NotificationsGlobales";
-import { brancherNotifications } from "../lib/notifications";
+import { brancherNotifications, effacerNotifications } from "../lib/notifications";
 import { activerPush } from "../lib/push";
 import { lire, sansCommentaires, sourcesLivrees } from "./sources";
 
@@ -45,9 +45,10 @@ const messageChiffre = (body: string, echec = false) => ({
  * et c'est **le** fichier que les deux exigences décrivent. Le tester par sa source
  * plutôt qu'en le paraphrasant est la seule façon d'éprouver ce qui tournera vraiment.
  */
-function chargerServiceWorker(onglets: unknown[]) {
+function chargerServiceWorker(onglets: unknown[], affichees: unknown[] = []) {
   const gestionnaires = new Map<string, (evenement: never) => void>();
   const montrer = vi.fn(async (_titre: string, _options: Record<string, unknown>) => {});
+  const badge = { setAppBadge: vi.fn(async (_n: number) => {}), clearAppBadge: vi.fn(async () => {}) };
   const caches = {
     open: vi.fn(async () => ({ addAll: vi.fn(), put: vi.fn() })),
     keys: vi.fn(async () => []),
@@ -61,13 +62,14 @@ function chargerServiceWorker(onglets: unknown[]) {
   const worker = {
     addEventListener: (type: string, gestionnaire: (evenement: never) => void) =>
       gestionnaires.set(type, gestionnaire),
-    registration: { showNotification: montrer },
+    registration: { showNotification: montrer, getNotifications: vi.fn(async () => affichees) },
+    navigator: badge,
     clients,
     location: { origin: "https://tacita.test" },
   };
 
   new Function("self", "caches", lire("public/sw.js"))(worker, caches);
-  return { gestionnaires, montrer, caches, clients };
+  return { gestionnaires, montrer, caches, clients, badge };
 }
 
 /** Déclenche un événement du worker et attend ce que son `waitUntil` a retenu. */
@@ -181,6 +183,7 @@ describe("REQ-UI-18 — abonnement Web Push, réveil, déchiffrement local, noti
     expect(montrer).toHaveBeenCalledWith("ana", {
       body: "on se voit à 18h ?",
       tag: "!dm:t",
+      renotify: true,
       data: { room_id: "!dm:t" },
     });
     debrancher();
@@ -198,6 +201,47 @@ describe("REQ-UI-18 — abonnement Web Push, réveil, déchiffrement local, noti
     });
 
     for (const appel of montrer.mock.calls) expect((appel[1] as { tag: string }).tag).toBe("!dm:t");
+  });
+
+  it("le badge suit les notifications en attente : il monte au push, retombe au tap", async () => {
+    // Deux conversations ont une notification affichée : le badge dit 2.
+    const avecDeux = chargerServiceWorker([], [{}, {}]);
+    await declencher(avecDeux.gestionnaires, "push", {
+      data: { json: () => ({ event_id: "$e1", room_id: "!dm:t" }) },
+    });
+    expect(avecDeux.badge.setAppBadge).toHaveBeenCalledWith(2);
+
+    // Tap sur la dernière : fermée, plus rien en attente, le badge s'efface.
+    const fermer = vi.fn();
+    const aucune = chargerServiceWorker([ongletOuvert()], []);
+    await declencher(aucune.gestionnaires, "notificationclick", {
+      notification: { close: fermer, data: { room_id: "!dm:t" } },
+    });
+    expect(fermer).toHaveBeenCalled();
+    expect(aucune.badge.clearAppBadge).toHaveBeenCalled();
+  });
+
+  it("ouvrir une conversation ferme ses notifications, et seulement les siennes", async () => {
+    const duSalon = { close: vi.fn() };
+    const dAilleurs = { close: vi.fn() };
+    const getNotifications = vi.fn(async (filtre?: { tag?: string }) =>
+      filtre?.tag === "!dm:t" ? [duSalon] : [dAilleurs],
+    );
+    Object.assign(globalThis.navigator.serviceWorker, {
+      getRegistration: vi.fn(async () => ({ getNotifications })),
+    });
+    const setAppBadge = vi.fn(async () => {});
+    Object.defineProperty(globalThis.navigator, "setAppBadge", { value: setAppBadge, configurable: true });
+    try {
+      await effacerNotifications("!dm:t");
+
+      expect(duSalon.close).toHaveBeenCalled();
+      expect(dAilleurs.close).not.toHaveBeenCalled();
+      // Il reste la notification de l'autre conversation : le badge le dit.
+      expect(setAppBadge).toHaveBeenCalledWith(1);
+    } finally {
+      delete (globalThis.navigator as { setAppBadge?: unknown }).setAppBadge;
+    }
   });
 
   it("le tap ouvre la conversation, sans doubler un onglet déjà ouvert", async () => {
@@ -242,6 +286,7 @@ describe("REQ-UIX-40 — le worker ne persiste rien, et l'échec reste silencieu
     expect(montrer).toHaveBeenCalledWith("Nouveau message", {
       body: undefined,
       tag: "!dm:t",
+      renotify: true,
       data: { room_id: "!dm:t" },
     });
   });

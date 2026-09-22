@@ -99,8 +99,34 @@ async function afficherNotification({ event_id, room_id }) {
     // Groupées par conversation : dix messages d'une même personne remplacent la
     // notification précédente au lieu d'empiler dix lignes.
     tag: room_id ?? "tacita",
+    // Sans lui, le remplacement par tag est silencieux : le deuxième message d'une
+    // conversation n'alerterait plus.
+    renotify: true,
     data: { room_id },
   });
+  await majBadge();
+}
+
+/**
+ * Le badge de l'icône suit les notifications affichées : il monte avec elles, et
+ * retombe quand on les ferme (tap ici, ouverture de la conversation côté app).
+ *
+ * ponytail: compte les conversations qui ont une notification en attente, pas les
+ * messages non lus — le payload ne porte pas le compteur de Synapse (REQ-PSH-02).
+ * Relayer `counts.unread` le jour où le nombre exact compte.
+ *
+ * Un badge qui échoue ne doit jamais empêcher la notification : erreurs avalées, et
+ * rien de journalisé.
+ */
+async function majBadge() {
+  try {
+    const navigateur = self.navigator;
+    if (!navigateur?.setAppBadge || !self.registration.getNotifications) return;
+    const affichees = await self.registration.getNotifications();
+    await (affichees.length > 0 ? navigateur.setAppBadge(affichees.length) : navigateur.clearAppBadge());
+  } catch {
+    // Badging API absente ou refusée : la notification est déjà là, c'est l'essentiel.
+  }
 }
 
 function demanderApercu(payload) {
@@ -127,14 +153,16 @@ self.addEventListener("notificationclick", (event) => {
   const cible = event.notification.data?.room_id ? `/c/${event.notification.data.room_id}` : "/";
 
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      const onglet = clients[0];
-      if (!onglet) return self.clients.openWindow(cible);
-      // `navigate` n'existe que sur un client contrôlé par ce worker : sans lui, on
-      // ramène au moins l'onglet au premier plan.
-      return Promise.resolve(onglet.navigate ? onglet.navigate(cible) : undefined)
-        .catch(() => undefined)
-        .then(() => onglet.focus());
-    }),
+    majBadge().then(() =>
+      self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+        const onglet = clients[0];
+        if (!onglet) return self.clients.openWindow(cible);
+        // `navigate` n'existe que sur un client contrôlé par ce worker : sans lui, on
+        // ramène au moins l'onglet au premier plan.
+        return Promise.resolve(onglet.navigate ? onglet.navigate(cible) : undefined)
+          .catch(() => undefined)
+          .then(() => onglet.focus());
+      }),
+    ),
   );
 });
