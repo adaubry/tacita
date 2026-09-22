@@ -486,6 +486,16 @@ describe("fond d'écran : aperçu, application sur cet appareil, réinitialisati
       expect(source).toMatch(/var\(--tacita-scrim\)/);
     }
   });
+
+  it("le fond reste en place quand les messages défilent", () => {
+    // La timeline est la zone défilante : `background-attachment: local` y fait monter le
+    // fond avec les messages jusqu'à le sortir de l'écran. jsdom ne rend pas le
+    // défilement ; la valeur, elle, se relit.
+    const source = sansCommentaires(
+      sourcesLivrees().find((fichier) => fichier.chemin.endsWith("components/conversation/Timeline.tsx"))!.code,
+    );
+    expect(source).not.toMatch(/backgroundAttachment|background-attachment/);
+  });
 });
 
 describe("trois niveaux de notification, en push rules natives", () => {

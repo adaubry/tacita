@@ -277,8 +277,11 @@ export function Timeline({
         backgroundImage: fondEcran
           ? `linear-gradient(var(--tacita-scrim), var(--tacita-scrim)), url(${fondEcran})`
           : undefined,
+        // Pas de `backgroundAttachment: "local"` : sur une zone défilante, c'est la valeur
+        // qui fait défiler le fond **avec** les messages, jusqu'à le faire sortir de
+        // l'écran. Le défaut (`scroll`) l'attache à la boîte : il reste en place.
         backgroundSize: fondEcran ? "cover" : undefined,
-        backgroundAttachment: fondEcran ? "local" : undefined,
+        backgroundPosition: fondEcran ? "center" : undefined,
       }}
     >
       {starter}
