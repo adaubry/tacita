@@ -11,10 +11,11 @@ l'environnement, il doit rester rejouable sur un VPS neuf.
 
 ## 0. Ce que cet environnement est — et ce qu'il n'est pas
 
-**Staging, pas production.** Il se jette et se reconstruit. Il n'y a donc **aucune
-sauvegarde**, et ce n'est pas un oubli : une donnée qui ne survit pas à un `down -v` ici
-est une donnée qu'on accepte de perdre. Ne jamais y mettre de conversation qu'on tient à
-garder.
+**Staging, pas production.** Il se jette et se reconstruit : une donnée laissée dans les
+volumes et non sauvegardée ne survit pas à un `down -v`. Depuis le 08/10/2026,
+[`infra/backup.sh`](../backup.sh) permet de figer l'état durable avant une reconstruction
+(§ 8) — mais tant qu'on ne l'a pas lancé, la règle tient : ne pas compter sur cette
+machine pour garder une conversation.
 
 Ce qui marchera pour la première fois ici, et qui n'a jamais pu marcher en local :
 
@@ -296,6 +297,20 @@ chiffrer. La noter, l'écran ne la remontre pas.
 
 ## 8. Déployer une nouvelle version
 
+### a. Sauvegarder d'abord
+
+Une MAJ de code ne touche pas les volumes ; mais une migration peut écrire en base, et un
+redéploiement est le moment où une fausse manœuvre (`down -v` de trop) coûte tout. On fige
+l'état durable avant, et on note l'horodatage rendu :
+
+```sh
+cd /opt/tacita/infra
+./backup.sh backup          # → ./backups/<horodatage>/
+./backup.sh list
+```
+
+### b. Déployer
+
 ```sh
 cd /opt/tacita && git pull
 cd infra && docker compose -f docker-compose.yml -f staging/docker-compose.yml up -d --build
@@ -304,17 +319,41 @@ cd infra && docker compose -f docker-compose.yml -f staging/docker-compose.yml u
 `--build` à chaque fois : les trois images du dépôt (shard, passerelle push, service de
 liens) sont construites localement, et sans le drapeau compose réutilise l'ancienne.
 
-Pour arrêter sans rien perdre :
+### c. Vérifier — aucune de ces étapes ne se saute
+
+```sh
+# 1. tous les services up/healthy, minio-init sorti en 0
+docker compose -f docker-compose.yml -f staging/docker-compose.yml ps
+
+# 2. le proxy sert le shard, et l'API Matrix répond
+curl -s -o /dev/null -w 'shard  %{http_code}\n'  https://chat.<domaine>/
+curl -s -o /dev/null -w 'matrix %{http_code}\n'  https://chat.<domaine>/_matrix/client/versions
+```
+
+Attendu : deux `200`. Puis, depuis un client **déjà appairé**, rouvrir
+`https://chat.<domaine>` : la session reprend sans redemander la clé de récupération —
+c'est la preuve que la clé de signature du homeserver a survécu au déploiement.
+
+### d. Revenir en arrière
+
+Le code seul : `git checkout <ref précédente>` puis le `up -d --build` de l'étape b
+retrouve la version d'avant, les volumes intacts. Si une migration a écrit en base et
+qu'il faut l'annuler, restaurer la sauvegarde de l'étape a :
+
+```sh
+cd /opt/tacita/infra
+./backup.sh restore <horodatage>   # coupe les services écrivains, réinjecte, relance la pile
+```
+
+### e. Arrêter sans rien perdre
 
 ```sh
 docker compose -f docker-compose.yml -f staging/docker-compose.yml stop
 ```
 
-`stop`, jamais `down -v` : les volumes portent les comptes Keycloak, la base Synapse, les
-médias — et **la clé de signature du homeserver**, dont la perte invalide toutes les
-sessions et tous les appareils appairés. La base `invite_tokens` n'est créée qu'à la
-première initialisation du volume PostgreSQL ; la reperdre demande de la
-recréer à la main.
+`stop`, jamais `down -v` : les volumes portent les comptes, la base Synapse, les médias —
+et **la clé de signature du homeserver**, dont la perte invalide toutes les sessions et
+tous les appareils appairés.
 
 ---
 
