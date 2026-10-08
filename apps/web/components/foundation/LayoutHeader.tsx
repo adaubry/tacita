@@ -35,7 +35,10 @@ export function LayoutHeader({ titre, fin, retour = true }: LayoutHeaderProps) {
             variant="ghost"
             isIconOnly
             icon={IconeRetour}
-            onClick={() => router.back()}
+            // Sans entrée précédente — conversation ouverte depuis une notification, ou URL
+            // restaurée par iOS à la relance — `back()` ne fait rien, et une PWA installée
+            // n'a aucun bouton de navigateur pour s'en sortir. Seul ce cas va à l'accueil.
+            onClick={() => (globalThis.history.length > 1 ? router.back() : router.push("/"))}
           />
         ) : undefined
       }

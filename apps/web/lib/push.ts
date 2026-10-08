@@ -70,6 +70,26 @@ export function apercuLocal(session: Session, roomId: string, eventId?: string):
  *
  * `standalone` sur `navigator` est une extension Safari, absente du type standard.
  */
+/**
+ * Ferme les notifications d'une conversation qu'on regarde, et remet le badge au compte.
+ * Sans ça, elles s'empilaient dans le centre de notifications d'iOS même après lecture.
+ *
+ * Le `tag` de chaque notification **est** son `roomId` (`public/sw.js`) : c'est ce qui
+ * permet de ne fermer que celles de ce salon. Même règle de badge que le worker —
+ * conversations en attente, pas messages non lus. `getRegistration` et non `ready` : sans
+ * worker enregistré (développement), `ready` ne résoudrait jamais.
+ */
+export async function effacerNotifications(roomId: string): Promise<void> {
+  const registration = await navigator.serviceWorker?.getRegistration();
+  if (!registration) return;
+
+  for (const notification of await registration.getNotifications({ tag: roomId })) {
+    notification.close();
+  }
+  const restantes = (await registration.getNotifications()).length;
+  await (restantes > 0 ? navigator.setAppBadge?.(restantes) : navigator.clearAppBadge?.());
+}
+
 export const estIOS = (userAgent: string) =>
   /iPad|iPhone|iPod/.test(userAgent) ||
   // iPadOS 13+ se présente comme un Macintosh dès qu'il est en « site pour ordinateur »,
@@ -278,7 +298,12 @@ export async function brancherPush(session: Session): Promise<DiagnosticPush> {
     // l'enregistrer serait enregistrer une panne.
     if (!keys?.p256dh || !keys.auth) return { ...echec(), abonnement: false };
 
-    const deja = pushers.some((pusher) => pusher.pushkey === endpoint && pusher.app_id === APP_ID);
+    // Un pusher encore en `event_id_only` compte comme absent : ce format retire aussi
+    // l'expéditeur, et le réécrire ici suffit à migrer les appareils déjà abonnés.
+    const deja = pushers.some(
+      (pusher) =>
+        pusher.pushkey === endpoint && pusher.app_id === APP_ID && pusher.data.format !== "event_id_only",
+    );
     if (deja) return { etat: "abonne", permission: true, abonnement: true, pusher: true };
 
     await session.client.setPusher({
@@ -291,14 +316,15 @@ export async function brancherPush(session: Session): Promise<DiagnosticPush> {
       // La spec Matrix laisse `data` libre ; le type du SDK ne connaît que `url`, `format`
       // et `brand`. Les clés de la subscription y sont indispensables — c'est là que la
       // passerelle les relit, et sans elles aucun push ne peut être chiffré.
+      // **Pas** de `format: "event_id_only"` : il retire aussi l'expéditeur, seul repli
+      // possible quand l'app est fermée. Synapse envoie donc l'événement complet à la
+      // passerelle — contenu **chiffré**, jamais du clair — qui n'en relaie au navigateur
+      // que les identifiants et l'expéditeur.
       data: {
         url: PUSH_NOTIFY_URL,
-        // le format que la passerelle relaie : jamais de contenu, seulement
-        // de quoi réveiller ce navigateur.
-        format: "event_id_only",
         p256dh: keys.p256dh,
         auth: keys.auth,
-      } as { url: string; format: string },
+      } as { url: string },
       append: false,
     });
 

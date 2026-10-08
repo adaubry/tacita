@@ -110,6 +110,9 @@ export function useGlissement({
   };
 
   return {
+    // Sans elle, l'appui long déclenche aussi la sélection de texte native d'iOS
+    // (voir `.tacita-geste` dans tokens.css).
+    className: "tacita-geste",
     style: {
       touchAction: "pan-y" as const,
       transform: ecart === 0 ? undefined : `translateX(${ecart}px)`,

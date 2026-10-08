@@ -166,8 +166,9 @@ self.addEventListener("fetch", (event) => {
 /*
  * les notifications.
  *
- * Le payload reçu ne porte que `{event_id, room_id}` : le serveur n'a
- * jamais rien d'autre à donner. Le contenu, lui, se déchiffre **ici**, au sens de « sur
+ * Le payload reçu porte `{event_id, room_id, sender, sender_display_name}` : des
+ * métadonnées que le serveur connaît déjà, jamais de contenu — il n'en a pas à donner.
+ * Le contenu, lui, se déchiffre **ici**, au sens de « sur
  * cet appareil » — mais pas dans ce fichier : les clés Megolm vivent dans le store
  * crypto d'une fenêtre, hors de portée du service worker. Une fenêtre ouverte est donc
  * interrogée, et c'est elle qui rend l'aperçu.
@@ -226,6 +227,37 @@ function optionsNotification(roomId, eventId, apercu) {
   };
 }
 
+/**
+ * Le badge de l'icône suit les notifications affichées : il monte avec elles et retombe
+ * quand on les ferme (tap ici, ouverture de la conversation côté app, `lib/push.ts`).
+ *
+ * ponytail: compte les conversations qui ont une notification en attente, pas les
+ * messages non lus — le payload ne porte pas le compteur de Synapse. Relayer
+ * `counts.unread` le jour où le nombre exact compte.
+ *
+ * Un badge qui échoue ne doit jamais empêcher la notification : erreurs avalées.
+ */
+/**
+ * Sans aperçu (application fermée — le cas nominal sur iOS —, ou clés absentes), la
+ * passerelle a relayé de qui vient le message : nom d'affichage, sinon la partie locale
+ * de l'identifiant (`@ana:serveur` → `ana`). Jamais de texte : il n'y en a pas.
+ */
+function titreDeRepli(charge) {
+  const nom = charge.sender_display_name || (charge.sender && charge.sender.slice(1).split(":")[0]);
+  return nom ? `Nouveau message de ${nom}` : "Nouveau message";
+}
+
+function majBadge() {
+  const navigateur = self.navigator;
+  if (!navigateur || !navigateur.setAppBadge) return Promise.resolve();
+  return self.registration
+    .getNotifications()
+    .then((affichees) =>
+      affichees.length > 0 ? navigateur.setAppBadge(affichees.length) : navigateur.clearAppBadge(),
+    )
+    .catch(() => {});
+}
+
 self.addEventListener("push", (event) => {
   let charge = null;
   try {
@@ -249,7 +281,9 @@ self.addEventListener("push", (event) => {
      * vrai que le silence.
      */
     event.waitUntil(
-      self.registration.showNotification("Nouveau message", optionsNotification("tacita", undefined, null)),
+      self.registration
+        .showNotification("Nouveau message", optionsNotification("tacita", undefined, null))
+        .then(majBadge),
     );
     return;
   }
@@ -261,15 +295,17 @@ self.addEventListener("push", (event) => {
         // clés absentes, événement pas encore synchronisé, aucune fenêtre
         // ouverte : notification **générique**, sans contenu et sans erreur bruyante.
         self.registration.showNotification(
-          apercu ? apercu.expediteur : "Nouveau message",
+          apercu ? apercu.expediteur : titreDeRepli(charge),
           optionsNotification(roomId, charge.event_id, apercu),
         ),
-      ),
+      )
+      .then(majBadge),
   );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  event.waitUntil(majBadge());
   const roomId = event.notification.data && event.notification.data.roomId;
   if (!roomId) return;
 

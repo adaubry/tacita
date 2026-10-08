@@ -490,6 +490,19 @@ describe("le glissement survit à sa propre durée, et se voit pendant", () => {
 });
 
 describe("glissement droit : les heures, et la zone morte du bord", () => {
+  it("l'appui long n'entraîne pas la sélection de texte native d'iOS", () => {
+    rendreMessage();
+    // Sur iOS, l'appui long sélectionnait le texte de la bulle (surlignage bleu) en plus
+    // d'ouvrir le hold menu. jsdom n'applique pas les feuilles de style : on vérifie que la
+    // bulle porte la classe, et que la classe coupe bien sélection et callout.
+    expect(carteMessage().classList.contains("tacita-geste")).toBe(true);
+    const regle = /\.tacita-geste\s*\{([^}]*)\}/.exec(
+      sansCommentaires(lire("components/foundation/tokens.css")),
+    )?.[1];
+    expect(regle).toMatch(/-webkit-touch-callout:\s*none/);
+    expect(regle).toMatch(/-webkit-user-select:\s*none/);
+  });
+
   it("révèle les heures", () => {
     const { onRevelerHeures } = rendreMessage();
     glisser(carteMessage(), 100, 100 + SEUIL_GLISSEMENT);

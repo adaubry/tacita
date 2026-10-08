@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 
 import { HOMESERVER } from "../../lib/config";
 
-import { VStack } from "../foundation/primitives";
+import { Placeholder } from "../foundation/Placeholder";
+import { Button, VStack } from "../foundation/primitives";
 import { Connexion } from "./Connexion";
 import { EcranDePorte } from "./EcranDePorte";
 import { Onboarding } from "./Onboarding";
@@ -35,7 +36,21 @@ export function RecoveryGate({
   /** Injecté en test ; en production, l'adresse du déploiement. */
   homeserverUrl?: string;
 }) {
-  const { etat, sessionOuverte } = useSession();
+  const { etat, sessionOuverte, reessayer } = useSession();
+
+  if (etat.phase === "echec") {
+    // Le chargement a dépassé son délai sans aboutir : jamais bloqué, on relance la
+    // reprise — ce qui rouvre les bases et rejoue la crypto.
+    return (
+      <EcranDePorte>
+        <Placeholder
+          titre="Chargement interrompu"
+          explication="Tacita n'a pas réussi à rouvrir votre session. Cela arrive parfois quand l'app est restée en arrière-plan."
+          action={<Button label="Réessayer" variant="primary" onClick={reessayer} />}
+        />
+      </EcranDePorte>
+    );
+  }
 
   if (etat.phase === "chargement") {
     // DESIGN.md : pas de spinner plein écran. Une géométrie d'attente, localisée.

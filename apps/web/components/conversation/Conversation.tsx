@@ -54,6 +54,7 @@ import { identifiantCourt } from "../../lib/identifiants";
 import { routeAppel, routeInfos } from "../../lib/routes";
 import { TranscodageIndisponible } from "../../lib/media-env";
 import { brancherModeMasque } from "../../lib/mode-masque";
+import { effacerNotifications } from "../../lib/push";
 import { lireFondEcran } from "../../lib/preferences";
 import { BandeauAppel } from "../appels/BandeauAppel";
 import { LayoutHeader } from "../foundation/LayoutHeader";
@@ -149,6 +150,18 @@ export function Conversation({ roomId }: { roomId: string }) {
       if (url) URL.revokeObjectURL(url);
       setFondEcran(undefined);
     };
+  }, [roomId]);
+
+  // Ouvrir une conversation efface ses notifications et remet le badge au compte. Aussi au
+  // retour au premier plan : sur iOS on déverrouille souvent sur une conversation déjà
+  // ouverte, qui ne se remonte pas, alors que des notifications y sont arrivées.
+  useEffect(() => {
+    const effacer = () => {
+      if (document.visibilityState === "visible") void effacerNotifications(roomId).catch(() => {});
+    };
+    effacer();
+    document.addEventListener("visibilitychange", effacer);
+    return () => document.removeEventListener("visibilitychange", effacer);
   }, [roomId]);
 
   // Les trois services de session, créés une fois par salon et **arrêtés au démontage** :

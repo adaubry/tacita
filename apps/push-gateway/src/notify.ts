@@ -9,6 +9,9 @@ type Device = { pushkey?: string; data?: PusherData };
 export type Notification = {
   event_id?: string;
   room_id?: string;
+  /** Métadonnées que Synapse connaît en clair ; relayées pour « Nouveau message de X ». */
+  sender?: string;
+  sender_display_name?: string;
   devices?: Device[];
 };
 
@@ -37,7 +40,7 @@ const OPTIONS = {
 
 /** Relaie une notification Synapse en Web Push ; retourne les pushkeys à supprimer. */
 export async function notify(notification: Notification): Promise<string[]> {
-  const { event_id, room_id, devices = [] } = notification;
+  const { event_id, room_id, sender, sender_display_name, devices = [] } = notification;
   // Synapse envoie aussi des notifications sans event_id (mise à jour du badge seul) : rien à réveiller.
   if (!event_id || !room_id) return [];
 
@@ -50,11 +53,14 @@ export async function notify(notification: Notification): Promise<string[]> {
         return;
       }
       try {
-        // event_id et room_id, rien d'autre. Le client déchiffre après réveil.
+        // Les deux identifiants et l'expéditeur, rien d'autre : le client déchiffre l'aperçu
+        // après réveil, et l'expéditeur est le repli quand il ne le peut pas (app fermée).
+        // Synapse envoie l'événement entier (contenu chiffré, nom de salon…) : les champs
+        // sont listés un par un, jamais un `...notification`.
         const subscription = { endpoint: pushkey, keys: { p256dh: data.p256dh, auth: data.auth } };
         const envoi = await webpush.sendNotification(
           subscription,
-          JSON.stringify({ event_id, room_id }),
+          JSON.stringify({ event_id, room_id, sender, sender_display_name }),
           OPTIONS,
         );
         // un code de statut, rien d'autre. C'est la seule preuve qu'un

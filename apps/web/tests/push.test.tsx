@@ -14,7 +14,13 @@ import { PushNotifications } from "../components/notifications/PushNotifications
 import { NotificationsPush } from "../components/settings/NotificationsPush";
 import { SessionProvider } from "../components/onboarding/SessionProvider";
 import { PUSH_CONFIG_URL, PUSH_NOTIFY_URL } from "../lib/config";
-import { apercuLocal, brancherPush, demanderEtBrancher, TYPE_APERCU } from "../lib/push";
+import {
+  apercuLocal,
+  brancherPush,
+  demanderEtBrancher,
+  effacerNotifications,
+  TYPE_APERCU,
+} from "../lib/push";
 import { lire } from "./sources";
 import { routeConversation } from "../lib/routes";
 
@@ -294,12 +300,24 @@ describe("la chaîne se répare seule, et se dit quand elle ne le peut pas", () 
     expect(enregistre.pushkey).toBe(ENDPOINT);
     expect(enregistre.data).toMatchObject({
       url: PUSH_NOTIFY_URL,
-      format: "event_id_only",
       // Sans elles la passerelle rejette le pusher : les enregistrer sans
       // les clés, c'est enregistrer une panne.
       p256dh: "p256dh-test",
       auth: "auth-test",
     });
+    // Plus de `event_id_only` : il retirait aussi l'expéditeur, seul repli app fermée.
+    expect(enregistre.data.format).toBeUndefined();
+  });
+
+  it("réécrit un pusher resté en event_id_only, pour que l'expéditeur arrive", async () => {
+    // Les appareils abonnés avant le changement : leur pusher existe, mais Synapse ne
+    // leur enverrait jamais l'expéditeur. Le réparer à l'ouverture suffit à les migrer.
+    vi.stubGlobal("Notification", { permission: "granted", requestPermission: vi.fn() });
+    abonnement = faireAbonnement();
+    pushers = [{ app_id: "org.tacita.web", pushkey: ENDPOINT, data: { format: "event_id_only" } }];
+
+    await brancherPush(session());
+    expect(setPusher).toHaveBeenCalledOnce();
   });
 
   it("ne réécrit rien quand les trois maillons sont déjà en place", async () => {
@@ -493,6 +511,12 @@ function chargerServiceWorker() {
         notifications.push({ titre, options });
         return Promise.resolve();
       },
+      // Les notifications réellement affichées : c'est ce que le badge compte.
+      getNotifications: () => Promise.resolve(notifications),
+    },
+    navigator: {
+      setAppBadge: vi.fn((_n: number) => Promise.resolve()),
+      clearAppBadge: vi.fn(() => Promise.resolve()),
     },
     clients: {
       claim: vi.fn(),
@@ -573,6 +597,20 @@ describe("le service worker n'écrit rien, ne journalise rien, ne devine rien", 
     });
   });
 
+  it("application fermée : la notification nomme l'expéditeur relayé, sans aperçu", async () => {
+    // Aucune fenêtre pour déchiffrer — le cas nominal sur iOS.
+    const sw = chargerServiceWorker();
+    sw.fenetresOuvertes([]);
+
+    await pousser(sw, { event_id: EVENEMENT, room_id: SALON, sender: "@alice:t", sender_display_name: "Alice" });
+    expect(sw.notifications[0]!.titre).toBe("Nouveau message de Alice");
+    expect(sw.notifications[0]!.options.body).toBe("");
+
+    // Sans nom d'affichage, la partie locale de l'identifiant.
+    await pousser(sw, { event_id: EVENEMENT, room_id: SALON, sender: "@ana:t" });
+    expect(sw.notifications[1]!.titre).toBe("Nouveau message de ana");
+  });
+
   it("une fenêtre qui ne sait pas déchiffrer donne le même résultat générique", async () => {
     const sw = chargerServiceWorker();
     sw.fenetresOuvertes([fenetreQuiRepond(null)]);
@@ -617,6 +655,46 @@ describe("le service worker n'écrit rien, ne journalise rien, ne devine rien", 
     await pousser(sw, { event_id: EVENEMENT });
     expect(sw.notifications).toHaveLength(1);
     expect(sw.notifications[0]!.titre).toBe("Nouveau message");
+  });
+
+  it("le badge suit les notifications : il monte au push, retombe au tap", async () => {
+    const sw = chargerServiceWorker();
+    sw.fenetresOuvertes([]);
+
+    await pousser(sw, { event_id: EVENEMENT, room_id: SALON });
+    expect(sw.self.navigator.setAppBadge).toHaveBeenCalledWith(1);
+
+    // Tap : la notification se ferme, plus rien en attente, le badge s'efface.
+    sw.notifications.length = 0;
+    let attente: Promise<unknown> = Promise.resolve();
+    sw.handlers.get("notificationclick")!({
+      notification: { close: vi.fn(), data: { roomId: SALON } },
+      waitUntil: (promesse: Promise<unknown>) => (attente = Promise.all([attente, promesse])),
+    });
+    await attente;
+    expect(sw.self.navigator.clearAppBadge).toHaveBeenCalled();
+  });
+
+  it("ouvrir une conversation ferme ses notifications, et seulement les siennes", async () => {
+    const duSalon = { close: vi.fn() };
+    const dAilleurs = { close: vi.fn() };
+    const getNotifications = vi.fn((filtre?: { tag?: string }) =>
+      Promise.resolve(filtre?.tag === SALON ? [duSalon] : [dAilleurs]),
+    );
+    const setAppBadge = vi.fn(() => Promise.resolve());
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      serviceWorker: { getRegistration: () => Promise.resolve({ getNotifications }) },
+      setAppBadge,
+    });
+
+    await effacerNotifications(SALON);
+
+    expect(duSalon.close).toHaveBeenCalled();
+    expect(dAilleurs.close).not.toHaveBeenCalled();
+    // Il reste la notification de l'autre conversation : le badge le dit.
+    expect(setAppBadge).toHaveBeenCalledWith(1);
+    vi.unstubAllGlobals();
   });
 
   it("prend la main dès son installation, sans attendre la fermeture des onglets", () => {

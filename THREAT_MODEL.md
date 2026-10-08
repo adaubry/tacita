@@ -108,8 +108,14 @@ is not merely a login credential.
 - **"Delivered" receipts are a Tacita extension.** Matrix defines only `m.read`. Ours
   is not a standard guarantee and is never presented as one.
 - **Push notifications carry no message content** — by construction, since the service
-  worker holds no Megolm keys. A notification for a closed app has no sender name and
-  no preview.
+  worker holds no Megolm keys. A notification for a closed app shows who wrote, never
+  what: the payload carries the sender's ID and display name, metadata the server
+  already holds in clear, encrypted to the device (RFC 8291) so the push service cannot
+  read it.
+- **The push gateway receives the full Synapse event.** Synapse has no "sender only"
+  pusher format, so the gateway gets the event with its content *encrypted*, plus the
+  room name and counters. It forwards four fields to the browser and logs none of the
+  body.
 
 ## What would change all of this
 
