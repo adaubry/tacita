@@ -4,7 +4,7 @@
 # Tout ce qui survit à un redéploiement vit dans trois volumes Docker nommés
 # (cf. `docker-compose.yml`, bloc `volumes:`) :
 #   - postgres-data  : comptes, rooms, métadonnées messages, base `invite_tokens`
-#   - minio-data     : médias uploadés (chiffrés)
+#   - garage-data    : médias uploadés (chiffrés côté client)
 #   - synapse-data   : **clé de signature du homeserver** + état local
 #
 # Un `docker compose up -d --build` ne les touche pas : une MAJ de code/config garde
@@ -27,11 +27,14 @@
 set -eu
 
 PROJECT="${COMPOSE_PROJECT:-tacita}"
-VOL_MINIO="${PROJECT}_minio-data"
+VOL_GARAGE="${PROJECT}_garage-data"
 VOL_SYNAPSE="${PROJECT}_synapse-data"
 
 # .env pour POSTGRES_USER (le dump passe par l'utilisateur, pas par un rôle en dur).
-ENV_FILE="${ENV_FILE:-.env}"
+# `./.env` et non `.env` : sans barre oblique, le `.` de dash — le /bin/sh d'Ubuntu —
+# cherche le fichier dans PATH, jamais dans le répertoire courant, et le script sort
+# sur « .env: not found » depuis `infra/` même.
+ENV_FILE="${ENV_FILE:-./.env}"
 if [ -f "$ENV_FILE" ]; then
   # shellcheck disable=SC1090
   . "$ENV_FILE"
@@ -77,11 +80,13 @@ cmd_backup() {
     gzip "$OUT/db-$db.sql"
   done
 
-  # ponytail: tar à chaud des volumes (minio/synapse-data sont vivants). Suffisant ici —
+  # ponytail: tar à chaud des volumes (garage/synapse-data sont vivants). Suffisant ici —
   # la clé de synapse-data est statique, les médias sont immuables une fois écrits. Si un
   # jour il faut une photo strictement cohérente : `docker compose stop` avant ces deux.
-  echo "  minio…"
-  tar_volume_out "$VOL_MINIO" "$OUT" minio.tar.gz
+  # Garage : LMDB et blocs immuables une fois écrits ; un tar à chaud reste cohérent pour
+  # les médias déjà stockés.
+  echo "  garage…"
+  tar_volume_out "$VOL_GARAGE" "$OUT" garage.tar.gz
 
   echo "  synapse-data…"
   tar_volume_out "$VOL_SYNAPSE" "$OUT" synapse.tar.gz
@@ -112,9 +117,9 @@ cmd_restore() {
       psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$db"
   done
 
-  echo "  minio…"
-  docker compose stop minio
-  tar_volume_in "$VOL_MINIO" "$DIR" minio.tar.gz
+  echo "  garage…"
+  docker compose stop garage
+  tar_volume_in "$VOL_GARAGE" "$DIR" garage.tar.gz
 
   echo "  synapse-data…"
   tar_volume_in "$VOL_SYNAPSE" "$DIR" synapse.tar.gz
