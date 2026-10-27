@@ -227,6 +227,17 @@ export const IconeFermer: ReactNode = (
   </svg>
 );
 
+/** Annuler un vocal en cours : le geste d'Instagram, donc la poubelle d'Instagram. */
+export const IconePoubelle: ReactNode = (
+  <svg {...trait}>
+    <path d="M4 7h16" />
+    <path d="M9.5 7V5.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V7" />
+    <path d="m6.6 7 .8 11.1a2 2 0 0 0 2 1.9h5.2a2 2 0 0 0 2-1.9L17.4 7" />
+    <path d="M10.5 11v5" />
+    <path d="M13.5 11v5" />
+  </svg>
+);
+
 export const IconeInfo: ReactNode = (
   <svg {...trait}>
     <circle cx="12" cy="12" r="8.5" />
