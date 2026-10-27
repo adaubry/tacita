@@ -229,10 +229,31 @@
  * distribution place ses règles à trois, quatre passent devant sans `!important`.
  */
 .tacita-bouton-doux:not(#\#):not(#\#):not(#\#):not(#\#) {
-  background-color: var(--color-accent-muted);
+  /*
+   * `--color-accent-muted` vaut 8 % d'alpha : posé sur un bouton, le vert tire vers le
+   * gris et le primaire ne s'impose plus. Le fond est donc dérivé de l'accent plutôt que
+   * repris du jeton — `color-mix` garde la dépendance, une valeur en dur la romprait au
+   * premier changement de palette. Le jeton global n'est pas touché : il sert ailleurs,
+   * sur des surfaces où 8 % est le bon poids.
+   */
+  background-color: light-dark(
+    color-mix(in srgb, var(--color-accent) 16%, transparent),
+    color-mix(in srgb, var(--color-accent) 24%, transparent)
+  );
   color: var(--color-accent);
   border-color: transparent;
-  border-radius: var(--radius-container);
+  border-radius: var(--radius-full);
+}
+
+/*
+ * Le secondaire de la paire. Il reste `ghost` — aucun fond, aucun poids — mais reprend la
+ * forme de son voisin : deux pilules côte à côte se lisent comme un seul choix à deux
+ * issues, là où une pilule et un libellé nu ne forment plus une paire du tout. La
+ * hiérarchie est alors portée par la seule couleur, ce qui est son travail.
+ */
+.tacita-bouton-contour:not(#\#):not(#\#):not(#\#):not(#\#) {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
 }
 
 /*

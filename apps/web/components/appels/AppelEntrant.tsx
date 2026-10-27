@@ -160,6 +160,7 @@ export function AppelEntrant() {
         <Button
           label="Ignorer"
           variant="ghost"
+          className="tacita-bouton-contour"
           onClick={() => setRejetes((connus) => new Set(connus).add(appel.cle))}
         />
         <Button

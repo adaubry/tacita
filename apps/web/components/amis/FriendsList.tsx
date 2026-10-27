@@ -110,13 +110,15 @@ export function DemandesList({ demandes, onAccepter, onRefuser }: DemandesListPr
               className="tacita-bouton-doux"
               onClick={() => onAccepter(demande)}
             />
-            {/* `ghost` et non `secondary` : deux cadres côte à côte font deux boîtes à
-                lire là où il n'y a qu'un choix. Le poids suffit à dire laquelle des deux
-                actions est la principale — et refuser n'efface rien, donc pas de `danger`. */}
+            {/* `ghost` et non `secondary` : le poids suffit à dire laquelle des deux
+                actions est la principale — et refuser n'efface rien, donc pas de `danger`.
+                Le contour ne lui rend pas ce poids, il lui rend la forme de son voisin :
+                une pilule à côté d'un libellé nu ne se lit plus comme une paire. */}
             <Button
               label="Refuser"
               variant="ghost"
               size="sm"
+              className="tacita-bouton-contour"
               onClick={() => onRefuser(demande)}
             />
           </div>
