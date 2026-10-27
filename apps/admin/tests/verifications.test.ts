@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { X509Certificate } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { diagnostiquer, type Contexte } from "../src/contrat.ts";
@@ -281,7 +282,10 @@ describe("le service démarre sous le moteur qui le lance réellement", () => {
   it("`node --experimental-strip-types` exécute la commande d'aide sans broncher", async () => {
     // Vitest transpile, ce moteur ne fait que retirer les types : un paquet peut être
     // vert de bout en bout et refuser de démarrer. Seul ce test le voit.
-    const entree = new URL("../src/index.ts", import.meta.url).pathname;
+    // `.pathname` rend « /C:/… » sous Windows, que Node résout depuis la racine du
+    // lecteur courant en « C:\C:\… » — le module reste introuvable et le test échoue
+    // là où rien n'est cassé. `fileURLToPath` est le seul convertisseur portable.
+    const entree = fileURLToPath(new URL("../src/index.ts", import.meta.url));
     expect(() =>
       execFileSync(process.execPath, ["--experimental-strip-types", entree, "--help"], {
         stdio: "pipe",

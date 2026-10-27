@@ -4,6 +4,8 @@ import { Text } from "../foundation/primitives";
 
 interface ConversationStarterProps {
   nom: string;
+  /** La clé de teinte du salon — le correspondant en DM, le salon en groupe. */
+  cle?: string;
   /** Identifiant Matrix en DM, nombre de membres en groupe : deux natures, deux rendus. */
   sousTitre: string;
   direct: boolean;
@@ -26,6 +28,7 @@ interface ConversationStarterProps {
  */
 export function ConversationStarter({
   nom,
+  cle,
   sousTitre,
   direct,
   onBloquer,
@@ -55,7 +58,7 @@ export function ConversationStarter({
       aria-label="Début de la conversation"
       style={{ display: "grid", gap: "var(--spacing-3)", padding: "var(--spacing-4) var(--spacing-3)" }}
     >
-      <ConversationAvatar nom={nom} direct={direct} taille={48} />
+      <ConversationAvatar nom={nom} direct={direct} taille={48} cle={cle} />
 
       <div>
         {/* `display` (22/600) puis `secondary` (13/400) : la hiérarchie se fait par

@@ -98,6 +98,19 @@ export const IconeCamera: ReactNode = (
   </svg>
 );
 
+/**
+ * Le micro de la barre d'écriture. Une capsule, son arc de maintien et son pied — la
+ * forme que tout le monde reconnaît, au trait des autres, sans onde ni pastille rouge :
+ * l'état d'enregistrement se dit par le compteur, pas par un clignotant.
+ */
+export const IconeMicro: ReactNode = (
+  <svg {...trait}>
+    <rect x="9.25" y="3" width="5.5" height="11" rx="2.75" />
+    <path d="M5.75 11.5a6.25 6.25 0 0 0 12.5 0" />
+    <path d="M12 17.75V21" />
+  </svg>
+);
+
 export const IconeEnvoyer: ReactNode = (
   <svg {...trait}>
     <path d="M20 12 4.5 5.5l2.5 6.5-2.5 6.5z" />

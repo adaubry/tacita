@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { lire, sansCommentaires } from "./sources";
 import { ConversationCollections } from "../components/media/ConversationCollections";
+import { EnregistreurVocal } from "../components/media/EnregistreurVocal";
 import { MediaMessage } from "../components/media/MediaMessage";
 import { MediaPicker } from "../components/media/MediaPicker";
 import { MediaViewer } from "../components/media/MediaViewer";
@@ -1115,5 +1116,162 @@ describe("un échec d'envoi dit lequel", () => {
     const transcode = sansCommentaires(lire("lib/transcode-video.ts"));
     expect(transcode).toContain("VideoDecoder.isConfigSupported(configSource)");
     expect(transcode).toContain('new EchecTranscodage(\n      "codec-source"');
+  });
+});
+
+/**
+ * **L'enregistreur vocal.** Logique à états — permission, démarrage, arrêt, extinction du
+ * micro — dont aucune panne ne se voit : un micro resté allumé, un flux non relâché ou un
+ * fichier étiqueté du format demandé plutôt que du format rendu passent tous silencieusement.
+ *
+ * `MediaRecorder` n'existe pas dans jsdom : la portée est injectée, ce qui est précisément
+ * la raison d'être du paramètre.
+ */
+describe("enregistreur vocal", () => {
+  class FauxEnregistreur {
+    static formats: string[] = ["audio/webm;codecs=opus"];
+    static isTypeSupported = (type: string) => FauxEnregistreur.formats.includes(type);
+
+    state = "inactive";
+    ondataavailable: ((evenement: { data: Blob }) => void) | null = null;
+    onstop: (() => void) | null = null;
+
+    constructor(readonly flux: unknown, readonly options: { mimeType: string }) {}
+
+    start() {
+      this.state = "recording";
+    }
+
+    stop() {
+      this.state = "inactive";
+      // Le navigateur rend un blob **de son conteneur à lui**, pas du type demandé.
+      this.ondataavailable?.({ data: new Blob(["opus"], { type: "audio/webm" }) });
+      this.onstop?.();
+    }
+  }
+
+  const pistes = () => [{ stop: vi.fn() }];
+
+  const portee = (getUserMedia: () => Promise<unknown>) =>
+    ({
+      MediaRecorder: FauxEnregistreur,
+      navigator: { mediaDevices: { getUserMedia } },
+    }) as unknown as typeof globalThis;
+
+  const micro = (arretees = pistes()) =>
+    portee(async () => ({ getTracks: () => arretees }));
+
+  /**
+   * Une horloge qui avance d'un pas fixe à chaque lecture. Le composant mesure la tenue
+   * de l'appui avec `Date.now()` : un pas nul la fige à zéro — l'appui maladroit —, un pas
+   * d'une seconde la place au-dessus du plancher.
+   */
+  let horloge: ReturnType<typeof vi.spyOn> | undefined;
+  const avance = (pas: number) => {
+    let instant = 0;
+    horloge = vi.spyOn(Date, "now").mockImplementation(() => (instant += pas));
+  };
+
+  beforeEach(() => {
+    FauxEnregistreur.formats = ["audio/webm;codecs=opus"];
+  });
+
+  afterEach(() => {
+    horloge?.mockRestore();
+    horloge = undefined;
+  });
+
+  it("ne rend rien du tout quand l'appareil n'enregistre aucun format", () => {
+    FauxEnregistreur.formats = [];
+    const { container } = render(<EnregistreurVocal onEnvoyer={vi.fn()} portee={micro()} />);
+    // Pas un bouton désactivé : rien. Un micro inerte est une fonction affichée qui ne
+    // marche pas, et l'absence se comprend mieux qu'un échec au moment d'envoyer.
+    expect(container.textContent).toBe("");
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("propose le micro quand un format existe", () => {
+    render(<EnregistreurVocal onEnvoyer={vi.fn()} portee={micro()} />);
+    expect(screen.getByRole("button", { name: "Enregistrer un message vocal" })).toBeTruthy();
+  });
+
+  it("enregistre puis envoie un fichier au type réellement produit", async () => {
+    avance(1000);
+    const envoye = vi.fn();
+    render(<EnregistreurVocal onEnvoyer={envoye} portee={micro()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer un message vocal" }));
+    await screen.findByRole("group", { name: "Enregistrement en cours" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Envoyer le message vocal" }));
+    await waitFor(() => expect(envoye).toHaveBeenCalledTimes(1));
+
+    const fichier = envoye.mock.calls[0]![0] as File;
+    // `audio/webm` et non `audio/webm;codecs=opus` : le pipeline s'aiguille sur le type du
+    // fichier, et lui mentir enverrait ces octets dans le mauvais chemin.
+    expect(fichier.type).toBe("audio/webm");
+    expect(fichier.name).toMatch(/^vocal-\d+\.webm$/);
+  });
+
+  /**
+   * Le plancher de 800 ms. Deux touchers maladroits expédiaient un vocal de 200 ms, que
+   * le destinataire ouvre pour n'entendre rien — et le garde d'alors ne vérifiait que
+   * « des octets existent », ce qui est vrai d'un silence.
+   */
+  it("jette un appui trop court au lieu d'envoyer un vocal muet", async () => {
+    avance(0);
+    const envoye = vi.fn();
+    const arretees = pistes();
+    render(<EnregistreurVocal onEnvoyer={envoye} portee={micro(arretees)} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer un message vocal" }));
+    await screen.findByRole("group", { name: "Enregistrement en cours" });
+    fireEvent.click(screen.getByRole("button", { name: "Envoyer le message vocal" }));
+
+    // Le micro s'éteint quand même, et rien n'est dit : un appui trop court n'est pas une
+    // faute à expliquer.
+    await waitFor(() => expect(arretees[0]!.stop).toHaveBeenCalled());
+    expect(envoye).not.toHaveBeenCalled();
+    expect(screen.queryByText(/micro/i)).toBeNull();
+  });
+
+  it("éteint le micro à l'envoi : une pastille qui reste allumée est une trahison", async () => {
+    avance(1000);
+    const arretees = pistes();
+    render(<EnregistreurVocal onEnvoyer={vi.fn()} portee={micro(arretees)} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer un message vocal" }));
+    await screen.findByRole("group", { name: "Enregistrement en cours" });
+    fireEvent.click(screen.getByRole("button", { name: "Envoyer le message vocal" }));
+
+    await waitFor(() => expect(arretees[0]!.stop).toHaveBeenCalled());
+  });
+
+  it("annule sans rien envoyer, et éteint le micro aussi", async () => {
+    const envoye = vi.fn();
+    const arretees = pistes();
+    render(<EnregistreurVocal onEnvoyer={envoye} portee={micro(arretees)} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer un message vocal" }));
+    await screen.findByRole("group", { name: "Enregistrement en cours" });
+    fireEvent.click(screen.getByRole("button", { name: "Annuler l'enregistrement" }));
+
+    await waitFor(() => expect(arretees[0]!.stop).toHaveBeenCalled());
+    expect(envoye).not.toHaveBeenCalled();
+  });
+
+  it("dit en toutes lettres qu'on a refusé le micro, et laisse réessayer", async () => {
+    const refus = Object.assign(new Error("refus"), { name: "NotAllowedError" });
+    render(
+      <EnregistreurVocal
+        onEnvoyer={vi.fn()}
+        portee={portee(() => Promise.reject(refus))}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer un message vocal" }));
+    await screen.findByText(/L'accès au micro a été refusé/);
+    // Le bouton reste : le refus se répare dans les réglages, puis on retente.
+    expect(screen.getByRole("button", { name: "Enregistrer un message vocal" })).toBeTruthy();
   });
 });

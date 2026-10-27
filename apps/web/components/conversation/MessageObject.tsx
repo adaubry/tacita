@@ -20,13 +20,37 @@ import { IconeCoche, IconeDoubleCoche } from "../foundation/icons";
 import { MediaMessage } from "../media/MediaMessage";
 import type { Media, Telecharger } from "../media/media";
 import { Button, Text, ToggleButton } from "../foundation/primitives";
+import { teinte } from "../foundation/teinte";
 import { TexteMessage } from "./TexteMessage";
 import { texteAffiche, type MessageAffiche } from "./message";
+
+/**
+ * **Le rayon d'une bulle, par ses quatre coins.** L'arête côté auteur est serrée — la
+ * gauche pour un message reçu, la droite pour un message envoyé — sauf le coin *haut* de
+ * la première bulle du groupe, qui reste rond parce que rien ne la précède.
+ *
+ * La règle ne dépend que de `moi` et de `entete` : `pied` ne sert pas ici. Une grappe se
+ * lit par son arête continue, pas par un coin final — et un dernier coin spécial aurait
+ * demandé de distinguer la bulle unique, qui est à la fois première et dernière.
+ */
+export function rayonBulle(moi: boolean, entete: boolean): string {
+  const rond = "var(--tacita-radius-bulle)";
+  const serre = "var(--tacita-radius-bulle-serre)";
+  // haut-gauche, haut-droit, bas-droit, bas-gauche
+  return moi
+    ? `${rond} ${entete ? rond : serre} ${serre} ${rond}`
+    : `${entete ? rond : serre} ${rond} ${rond} ${serre}`;
+}
 
 interface MessageObjectProps {
   message: MessageAffiche;
   /** calculé par `shouldShowHeader`, jamais deviné ici. */
   entete: boolean;
+  /**
+   * calculé par `finDeGroupe`, jamais deviné ici. Ferme la grappe : c'est la bulle qui
+   * porte l'heure et l'accusé, et qui arrondit son coin bas côté auteur.
+   */
+  pied: boolean;
   /** la timeline entière révèle ses heures, pas une ligne isolée. */
   heureVisible: boolean;
   reactions?: ReactionTally[];
@@ -137,10 +161,14 @@ function EtatEnvoi({
 }
 
 /**
- * Message object (composant 11), regroupement Discord.
+ * Message object (composant 11), regroupement Discord **en bulles** (DESIGN.md §
+ * Components).
  *
- * DESIGN.md : timeline **sans bulles**. Un message groupé s'appende sous le précédent,
- * sans avatar ni nom — c'est le blanc qui sépare, pas un cadre.
+ * La règle des 5 minutes ne change pas — ce qu'elle produit, si : au lieu d'un blanc entre
+ * deux prises de parole, une grappe de bulles dont l'arête côté auteur est continue. Reçu
+ * à gauche sur la surface et son filet, envoyé à droite sur le voile du salon ; **un seul
+ * côté est teinté**, colorier les deux ferait une salade de fruits dont on ne lirait plus
+ * le sens.
  *
  * glissement gauche pour répondre, glissement droit pour révéler
  * les heures, avec la zone morte de 20 px au bord gauche.
@@ -148,6 +176,7 @@ function EtatEnvoi({
 export function MessageObject({
   message,
   entete,
+  pied,
   heureVisible,
   reactions = [],
   recu,
@@ -164,6 +193,49 @@ export function MessageObject({
   // Lié une fois : `message.media` est optionnel, et le rebrancher dans chaque garde
   // redemanderait un `!` au compilateur à chaque usage.
   const media = message.media;
+  const moi = message.moi;
+
+  /**
+   * **Le vocal est le seul média qui prend une bulle**.
+   *
+   * La règle « un média n'entre pas dans une bulle » vaut pour ce qui porte déjà son
+   * propre cadre : une photo *est* un rectangle, l'entourer en ajoute un second. Un
+   * lecteur vocal n'est pas un cadre, c'est une rangée de commandes — posée nue dans la
+   * timeline, elle flotte sans rien qui dise où le message commence et où il finit. La
+   * bulle lui donne ce bord, et au passage la teinte, qui dit de quel côté il vient.
+   */
+  const vocal = media?.msgtype === "m.audio";
+
+  /*
+   * La teinte **de l'auteur**, dérivée de son identifiant Matrix — pas celle du salon,
+   * qui est posée plus haut et colore vos bulles. Dans un groupe, c'est ce qui sépare
+   * trois interlocuteurs d'un coup d'œil, et c'est exactement la couleur que porte déjà
+   * leur avatar à gauche du nom.
+   */
+  const { encre } = teinte(message.auteur);
+  const encreAuteur = `light-dark(${encre.clair}, ${encre.sombre})`;
+
+  /*
+   * Le message cité. Il vit **dans** la bulle quand il y en a une, et au-dessus du média
+   * sinon : c'est un rappel de ce à quoi on répond, il appartient au message, pas à la
+   * colonne.
+   */
+  const cite = message.repondA && (
+    <div
+      style={{
+        borderInlineStart: "2px solid var(--color-border)",
+        paddingInlineStart: "var(--spacing-2)",
+        marginBottom: "var(--spacing-1)",
+        minWidth: 0,
+      }}
+    >
+      <Text type="supporting" color="secondary" maxLines={1}>
+        {message.repondA.nom
+          ? `${message.repondA.nom} · ${message.repondA.extrait}`
+          : message.repondA.extrait}
+      </Text>
+    </div>
+  );
 
   const geste = useGlissement({
     onGauche: onRepondre,
@@ -179,15 +251,25 @@ export function MessageObject({
       style={{
         ...geste.style,
         display: "flex",
-        gap: "var(--spacing-3)",
+        // Le côté *est* l'information : c'est lui qui dit qui parle, avant la couleur et
+        // avant l'avatar. Il n'y a pas de queue pointue — elle casserait l'empilement
+        // d'une grappe, et c'est le détail qui date le plus vite une messagerie.
+        justifyContent: moi ? "flex-end" : "flex-start",
         // L'alignement de l'avatar est réservé même sans en-tête : sans lui, un message
         // groupé rentrerait sous l'avatar et la colonne de texte danserait.
+        gap: "var(--spacing-2)",
         /*
          * Un groupe s'ouvre sur `--spacing-3` et non `--spacing-2` : à 8 px, deux
          * groupes d'auteurs différents se touchaient presque, et le regroupement Discord
          * — qui repose entièrement sur l'écart — ne se lisait plus.
+         *
+         * **À l'intérieur d'un groupe, 2 px** et non zéro : les bulles doivent se toucher
+         * sans fusionner. C'est ce mince filet de fond qui rend lisibles les deux coins
+         * serrés de l'arête, et donc le fait qu'il y a là plusieurs messages.
          */
-        padding: entete ? "var(--spacing-3) var(--spacing-3) 0" : "0 var(--spacing-3)",
+        padding: entete
+          ? "var(--spacing-3) var(--spacing-3) 0"
+          : "var(--spacing-0-5) var(--spacing-3) 0",
         // Un envoi en cours ou en échec est plus pâle : l'information est dans l'état,
         // pas dans une icône de plus.
         /*
@@ -200,85 +282,129 @@ export function MessageObject({
          */
       }}
     >
-      <div style={{ width: 40, flexShrink: 0 }}>
-        {/* ponytail: un `useImageMxc` par en-tête, donc un `fetch` par en-tête pour le
-            même auteur. C'est le cache HTTP du navigateur qui absorbe les suivants, un
-            média Matrix étant immuable. À mutualiser dans `ConversationAvatar` le jour où
-            une timeline longue le fait sentir — pas avant, ce serait un cache de plus. */}
-        {entete && <ConversationAvatar nom={message.nom} mxc={message.avatar} direct taille={40} />}
-      </div>
+      {/* La colonne d'avatar n'existe plus que du côté reçu : vos bulles sont à droite, et
+          un avatar de vous-même contre chacune d'elles ne dirait rien que l'alignement ne
+          dise déjà — il prendrait seulement 48 px de largeur de lecture. */}
+      {!moi && (
+        <div style={{ width: 40, flexShrink: 0 }}>
+          {/* ponytail: un `useImageMxc` par en-tête, donc un `fetch` par en-tête pour le
+              même auteur. C'est le cache HTTP du navigateur qui absorbe les suivants, un
+              média Matrix étant immuable. À mutualiser dans `ConversationAvatar` le jour où
+              une timeline longue le fait sentir — pas avant, ce serait un cache de plus. */}
+          {entete && <ConversationAvatar nom={message.nom} mxc={message.avatar} direct taille={40} cle={message.auteur} />}
+        </div>
+      )}
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {entete && (
-          <div style={{ display: "flex", alignItems: "baseline", gap: "var(--spacing-2)" }}>
-            <Text type="body" weight="bold">
-              {message.nom}
-            </Text>
-            <Text type="supporting" color="secondary" hasTabularNumbers>
-              {heure(message.horodatage)}
-            </Text>
-          </div>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: moi ? "flex-end" : "flex-start",
+          minWidth: 0,
+          /*
+           * Une bulle qui traverse l'écran n'est plus une bulle. La largeur fait partie de
+           * ce qui se lit — elle dit « voilà une prise de parole » avant le texte — et une
+           * ligne de 390 px se relit mal. `min()` borne les deux bouts : la proportion tient
+           * sur un téléphone, la mesure absolue empêche la bulle de s'étaler sur un écran
+           * large, où 78 % feraient des lignes de cent caractères.
+           *
+           * Un vocal respire un peu plus : sa forme d'onde a une largeur minimale en
+           * dessous de laquelle les barres se tassent, et contrairement à une phrase, elle
+           * ne peut pas passer à la ligne.
+           */
+          maxWidth: vocal ? "min(92%, 30rem)" : "min(78%, 30rem)",
+        }}
+      >
+        {/* Le nom ne se répète pas dans un groupe, et **jamais pour soi** : on sait qui on
+            est, et l'écrire au-dessus de chacune de ses propres bulles est le bruit que le
+            regroupement sert justement à retirer. L'heure descend au pied de la grappe. */}
+        {entete && !moi && (
+          <Text type="supporting" weight="bold" style={{ color: encreAuteur }}>
+            {message.nom}
+          </Text>
         )}
 
-        {/* **à quel message celui-ci répond.** Sans cette ligne, une réponse
-            était un message comme un autre : le lien vers ce qu'elle vise existait dans
-            l'événement, et n'était rendu nulle part.
+        {/* **La pièce jointe n'entre pas dans une bulle** (DESIGN.md § Components) : dans
+            la timeline, un média *est* le message, et il garde le cadrage de son auteur.
+            Une bulle autour ajouterait un cadre à ce qui en porte déjà un, et une teinte
+            derrière une photo ne se verrait pas. Le cité passe alors au-dessus. */}
+        {media && telecharger && !vocal && (
+          <>
+            {cite}
+            <MediaMessage
+              media={media}
+              telecharger={telecharger}
+              onOuvrir={onOuvrirMedia}
+              onSauvegarder={onSauvegarderMedia ? () => onSauvegarderMedia(media) : undefined}
+            />
+          </>
+        )}
 
-            Un filet à gauche et de l'encre secondaire, pas un cadre : la timeline est sans
-            bulles (DESIGN.md), et le cité doit se lire comme un rappel — plus discret que
-            le message qui le porte, sinon c'est lui qu'on lit. Une seule ligne, tronquée :
-            citer trois lignes de quelqu'un d'autre déplacerait le sujet de la colonne. */}
-        {message.repondA && (
+        {/* `minWidth: 0` sur la bulle : un enfant de flex refuse par défaut de descendre
+            sous la largeur de son contenu, et un mot insécable — une URL, un « aaaaaaa… »
+            — poussait donc la rangée hors de l'écran. */}
+        {(!media || vocal) && (
           <div
             style={{
-              borderInlineStart: "2px solid var(--color-border)",
-              paddingInlineStart: "var(--spacing-2)",
-              marginBottom: "var(--spacing-1)",
               minWidth: 0,
+              // Le lecteur se dimensionne sur sa bulle : sa forme d'onde est en `flex: 1`,
+              // et sans largeur définie au-dessus d'elle les barres se tassent.
+              width: vocal ? "100%" : undefined,
+              borderRadius: rayonBulle(moi, entete),
+              padding: "var(--spacing-2) var(--spacing-3)",
+              /*
+               * Le voile du salon pour vos bulles — **posé plus haut, sur l'écran**, et lu
+               * ici par héritage : ce composant n'a pas à savoir dans quelle conversation
+               * il est. Le repli sur `accent-muted` n'est pas décoratif : il garde la
+               * timeline lisible si la variable n'a pas été posée (un rendu isolé, un
+               * test), au lieu d'un fond transparent sur fond transparent.
+               */
+              background: moi
+                ? "var(--tacita-teinte-voile, var(--color-accent-muted))"
+                : "var(--color-background-surface)",
+              /*
+               * Le filet ne va **que** du côté reçu, et c'est ce qui équilibre les deux :
+               * la bulle teintée se détache par sa couleur, la bulle neutre par son trait.
+               * Un filet sur la teintée ferait deux signaux pour une seule information.
+               */
+              border: moi ? undefined : "1px solid var(--color-border)",
             }}
           >
-            <Text type="supporting" color="secondary" maxLines={1}>
-              {message.repondA.nom
-                ? `${message.repondA.nom} · ${message.repondA.extrait}`
-                : message.repondA.extrait}
-            </Text>
+            {cite}
+            {vocal && media && telecharger ? (
+              <MediaMessage
+                media={media}
+                telecharger={telecharger}
+                onOuvrir={onOuvrirMedia}
+                onSauvegarder={onSauvegarderMedia ? () => onSauvegarderMedia(media) : undefined}
+              />
+            ) : (
+              <TexteMessage texte={texteAffiche(message.texte)} />
+            )}
           </div>
         )}
 
-        {/* une pièce jointe remplace le corps de texte : le `body` d'un
-            média est son nom de fichier, que la tuile porte déjà. */}
-        {media && telecharger && (
-          <MediaMessage
-            media={media}
-            telecharger={telecharger}
-            onOuvrir={onOuvrirMedia}
-            onSauvegarder={onSauvegarderMedia ? () => onSauvegarderMedia(media) : undefined}
-          />
-        )}
-
-        {/* `minWidth: 0` sur la colonne du corps : un enfant de flex refuse par défaut de
-            descendre sous la largeur de son contenu, et un mot insécable — une URL, un
-            « aaaaaaa… » — poussait donc la rangée hors de l'écran. */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-end",
-            gap: "var(--spacing-2)",
-            minWidth: 0,
-          }}
-        >
-          {!message.media && <TexteMessage texte={texteAffiche(message.texte)} />}
-
-          {/* révélées par le geste, jamais affichées en permanence : une
-              heure sur chaque ligne, c'est une colonne de bruit. */}
-          {heureVisible && !entete && (
+        {/* **Le pied de la grappe** : l'heure et l'accusé sous la dernière bulle, et non
+            dans l'en-tête. C'est là qu'on les cherche — au bout de ce qui vient d'être dit,
+            pas au-dessus de ce qui l'ouvre — et c'est ce qui donne à la grappe sa fin.
+            Le geste de glissement révèle les heures des messages intermédiaires ; les
+            afficher en permanence ferait une colonne de bruit. */}
+        {(pied || heureVisible || recu) && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--spacing-1)",
+              paddingTop: "var(--spacing-0-5)",
+              paddingInline: "var(--spacing-1)",
+            }}
+          >
             <Text type="supporting" color="secondary" hasTabularNumbers>
               {heure(message.horodatage)}
             </Text>
-          )}
-
-          {recu && <Recu statut={recu.statut} indecidable={recu.indecidable} />}
-        </div>
+            {recu && <Recu statut={recu.statut} indecidable={recu.indecidable} />}
+          </div>
+        )}
 
         {reactions.length > 0 && (
           <div style={{ display: "flex", gap: "var(--spacing-1)", paddingTop: "var(--spacing-1)" }}>

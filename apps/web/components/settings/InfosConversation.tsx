@@ -24,6 +24,7 @@ import { useEffect, useMemo, useState } from "react";
 import { contactsDeLaSession } from "../../lib/contacts";
 import { NewConversationSheet } from "../accueil/NewConversationSheet";
 import { ConversationAvatar } from "../foundation/ConversationAvatar";
+import { cleTeinte } from "../foundation/teinte";
 import { LayoutHeader } from "../foundation/LayoutHeader";
 import {
   IconeAjouterMembre,
@@ -146,7 +147,7 @@ export function InfosConversation({ roomId }: { roomId: string }) {
           padding: "var(--spacing-4)",
         }}
       >
-        <ConversationAvatar nom={nom} mxc={salon?.avatarUrl} direct={direct} taille={48} />
+        <ConversationAvatar nom={nom} mxc={salon?.avatarUrl} direct={direct} taille={48} cle={salon ? cleTeinte(salon) : roomId} />
         <Text type="display-3" as="h1">
           {nom}
         </Text>

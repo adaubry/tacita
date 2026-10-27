@@ -35,7 +35,6 @@ docs/
 # repris dans CONTRIBUTING.md et THREAT_MODEL.md, qui eux sont publics.
 CLAUDE.md
 DECISIONS.md
-DESIGN.md
 PRODUCT.md
 .claude/
 .impeccable/

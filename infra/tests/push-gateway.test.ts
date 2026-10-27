@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
@@ -120,10 +121,15 @@ describe("la passerelle Web Push est provisionnée par ce module", () => {
    * sous ce moteur, et il refuse une clé invalide en le disant.
    */
   it("refuse une clé VAPID invalide en nommant la variable, pas des octets", () => {
-    const entree = new URL("../../apps/push-gateway/src/index.ts", import.meta.url);
+    // `fileURLToPath` et non `.pathname` : sous Windows ce dernier rend « /C:/… », que
+    // Node résout depuis la racine du lecteur courant — « C:\C:\… ». Le module reste
+    // introuvable, le sous-processus meurt sur un échec de chargement, et le test échoue
+    // en annonçant que le service a démarré avec une clé invalide : le contraire de ce
+    // qui s'est passé.
+    const entree = fileURLToPath(new URL("../../apps/push-gateway/src/index.ts", import.meta.url));
     let sortie = "";
     try {
-      execFileSync(process.execPath, ["--experimental-strip-types", entree.pathname], {
+      execFileSync(process.execPath, ["--experimental-strip-types", entree], {
         stdio: "pipe",
         env: {
           ...process.env,

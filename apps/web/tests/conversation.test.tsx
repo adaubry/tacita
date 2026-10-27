@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Composer } from "../components/conversation/Composer";
 import { ConversationStarter } from "../components/conversation/ConversationStarter";
 import { HoldMenu } from "../components/conversation/HoldMenu";
-import { MessageObject } from "../components/conversation/MessageObject";
+import { MessageObject, rayonBulle } from "../components/conversation/MessageObject";
 import { decouperLiens } from "../components/conversation/TexteMessage";
 import { Timeline } from "../components/conversation/Timeline";
 import {
@@ -13,6 +13,7 @@ import {
   citation,
   depuisFile,
   FENETRE_GROUPE_MS,
+  finDeGroupe,
   nouveauJour,
   shouldShowHeader,
   texteAffiche,
@@ -57,6 +58,8 @@ const rendreMessage = (props: Partial<Parameters<typeof MessageObject>[0]> = {})
   const actions = {
     message: message(),
     entete: true,
+    // Un message rendu seul est à la fois premier et dernier de son groupe.
+    pied: true,
     heureVisible: false,
     onRepondre: vi.fn(),
     onHold: vi.fn(),
@@ -1060,5 +1063,77 @@ describe("une conversation s'ouvre sur son dernier message", () => {
       Reflect.deleteProperty(HTMLElement.prototype, "scrollHeight");
       Reflect.deleteProperty(HTMLElement.prototype, "scrollTop");
     }
+  });
+});
+
+/**
+ * **La grappe de bulles** (DESIGN.md § Components).
+ *
+ * Deux règles qui cassent en silence : un coin posé du mauvais côté ne lève aucune erreur
+ * et ne se voit qu'à l'œil, sur un appareil, dans une conversation à plusieurs messages.
+ * jsdom ne calcule aucune géométrie — ce qui se teste ici, ce sont les deux fonctions
+ * pures qui la décident, pas le rendu.
+ */
+describe("les bulles se groupent, et leur arête dit de quel côté on parle", () => {
+  it("un message ferme son groupe quand le suivant en ouvrirait un autre", () => {
+    const premier = message({ horodatage: LUNDI_10H });
+
+    // Rien après : c'est forcément le dernier.
+    expect(finDeGroupe(premier, undefined)).toBe(true);
+
+    // Même auteur, dans la fenêtre : le groupe continue.
+    expect(
+      finDeGroupe(premier, message({ cle: "$deux", horodatage: LUNDI_10H + 60_000 })),
+    ).toBe(false);
+
+    // Un autre auteur ferme le groupe, même une seconde plus tard.
+    expect(
+      finDeGroupe(
+        premier,
+        message({ cle: "$deux", auteur: "@camille:tacita.test", horodatage: LUNDI_10H + 1000 }),
+      ),
+    ).toBe(true);
+
+    // Le même auteur hors fenêtre aussi : c'est la règle des 5 minutes, lue à l'envers.
+    expect(
+      finDeGroupe(
+        premier,
+        message({ cle: "$deux", horodatage: LUNDI_10H + FENETRE_GROUPE_MS + 1 }),
+      ),
+    ).toBe(true);
+  });
+
+  it("est le symétrique exact de `shouldShowHeader`", () => {
+    const a = message({ horodatage: LUNDI_10H });
+    for (const b of [
+      message({ cle: "$b", horodatage: LUNDI_10H + 60_000 }),
+      message({ cle: "$b", auteur: "@camille:tacita.test", horodatage: LUNDI_10H + 1000 }),
+      message({ cle: "$b", horodatage: LUNDI_10H + FENETRE_GROUPE_MS + 1 }),
+    ]) {
+      expect(finDeGroupe(a, b)).toBe(shouldShowHeader(a, b));
+    }
+  });
+
+  it("serre l'arête côté auteur, et garde rond le coin haut du premier", () => {
+    const rond = "var(--tacita-radius-bulle)";
+    const serre = "var(--tacita-radius-bulle-serre)";
+
+    // Reçu : l'arête gauche est serrée — sauf en haut de la première bulle.
+    expect(rayonBulle(false, true)).toBe(`${rond} ${rond} ${rond} ${serre}`);
+    expect(rayonBulle(false, false)).toBe(`${serre} ${rond} ${rond} ${serre}`);
+
+    // Envoyé : exactement le miroir, sur l'arête droite.
+    expect(rayonBulle(true, true)).toBe(`${rond} ${rond} ${serre} ${rond}`);
+    expect(rayonBulle(true, false)).toBe(`${rond} ${serre} ${serre} ${rond}`);
+  });
+
+  it("ne pose pas d'avatar sur ses propres bulles — le côté le dit déjà", () => {
+    rendreMessage({ message: message({ moi: true, nom: "moi" }), entete: true });
+    expect(within(carteMessage("moi")).queryByRole("img")).toBeNull();
+
+    cleanup();
+
+    rendreMessage({ message: message(), entete: true });
+    expect(within(carteMessage()).getAllByRole("img").length).toBeGreaterThan(0);
   });
 });

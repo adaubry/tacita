@@ -107,7 +107,7 @@ export function RecentSearches({ profils, onChoisir, onPurger }: RecentSearchesP
                   height: "auto",
                 }}
               >
-                <ConversationAvatar nom={profil.nom} direct />
+                <ConversationAvatar nom={profil.nom} direct cle={profil.userId} />
                 <Text type="supporting" color="secondary" maxLines={1}>
                   {profil.nom}
                 </Text>

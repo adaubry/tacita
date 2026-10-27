@@ -13,6 +13,7 @@ import type { ReactNode } from "react";
 
 import { identifiantCourt } from "../../lib/identifiants";
 import { ConversationAvatar } from "../foundation/ConversationAvatar";
+import { variablesTeinte } from "../foundation/teinte";
 import { useImageMxc } from "../foundation/useImageMxc";
 import {
   IconeAjouterMembre,
@@ -26,6 +27,12 @@ interface ProfileCardProps {
   nom: string;
   /** L'identifiant Matrix, affiché sous le nom sur son propre profil. */
   userId?: string;
+  /**
+   * La clé de teinte — l'identifiant Matrix de la personne regardée. **Absente sur son
+   * propre profil** : la teinte distingue les autres les uns des autres, et se l'attribuer
+   * à soi-même ne distingue rien. L'écran de soi garde donc l'aplat d'accent.
+   */
+  cle?: string;
   /** le `mxc://` de la photo. Absent → initiales. */
   avatarUrl?: string;
   /** le `mxc://` de la bannière. Absent → l'aplat d'accent doux. */
@@ -192,6 +199,7 @@ const RAIL = "var(--spacing-3)";
 export function ProfileCard({
   nom,
   userId,
+  cle,
   avatarUrl,
   bannerUrl,
   actions,
@@ -220,7 +228,14 @@ export function ProfileCard({
   // L'ombre est coupée au bord de l'écran, où elle n'était de toute façon pas visible.
   return (
     <header
-      style={{ position: "relative", display: "grid", overflow: "hidden" }}
+      style={{
+        position: "relative",
+        display: "grid",
+        overflow: "hidden",
+        // La teinte de la personne regardée, et rien sur son propre profil : c'est ce qui
+        // fait qu'une bannière absente prend *sa* couleur plutôt que l'accent de l'app.
+        ...(cle ? variablesTeinte(cle) : {}),
+      }}
     >
       {/* La bannière est décorative : le nom et l'identifiant, juste dessous, disent qui
           on regarde. Une description alternative n'ajouterait rien et se lirait à chaque
@@ -237,7 +252,7 @@ export function ProfileCard({
           height: HAUTEUR_BANNIERE,
           background: banniere
             ? `url(${JSON.stringify(banniere)}) center / cover no-repeat`
-            : "var(--color-accent-muted)",
+            : "var(--tacita-teinte-voile, var(--color-accent-muted))",
           maskImage: fonduBanniere,
           WebkitMaskImage: fonduBanniere,
         }}
@@ -363,6 +378,7 @@ export function ProfileCard({
             mxc={avatarUrl}
             direct
             taille={TAILLE_AVATAR}
+            cle={cle}
           />
         </div>
       </div>
