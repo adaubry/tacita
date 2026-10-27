@@ -105,15 +105,15 @@ describe("lecture : qui écrit, et le signal qui le dit", () => {
   it("rend ceux qui écrivent, et jamais soi-même", () => {
     const salon = fakeSession({
       members: [
-        fakeMember("@luca:tacita.test", "luca", 100, true),
-        fakeMember("@adam:tacita.test", "adam", 0, true),
+        fakeMember("@bob:tacita.test", "bob", 100, true),
+        fakeMember("@alice:tacita.test", "alice", 0, true),
         fakeMember("@zoe:tacita.test", "zoé"),
       ],
     });
 
-    // `@luca` est l'utilisateur courant du mock : se voir soi-même « en train
+    // `@bob` est l'utilisateur courant du mock : se voir soi-même « en train
     // d'écrire » serait un indicateur qui décrit sa propre frappe.
-    expect(typingUsers(salon.session, ROOM)).toEqual(["@adam:tacita.test"]);
+    expect(typingUsers(salon.session, ROOM)).toEqual(["@alice:tacita.test"]);
   });
 
   it("personne n'écrit : une liste vide, pas une absence", () => {

@@ -17,7 +17,7 @@ const ROOM = "!salon:tacita.test";
 const doc = (eventId: string, body: string, tsOrigin = 1) => ({
   eventId,
   roomId: ROOM,
-  sender: "@luca:tacita.test",
+  sender: "@bob:tacita.test",
   tsOrigin,
   body,
   msgtype: "m.text",

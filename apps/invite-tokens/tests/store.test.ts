@@ -24,7 +24,7 @@ describe("la consommation est une seule instruction, garde compris", () => {
    */
   it("un seul appel, un seul UPDATE, aucun SELECT préalable des usages", async () => {
     const { query, textes } = espion([
-      { id: "l1", issuer: "@luca:tacita.test", kind: "friend", room_id: null, expires_at: "1", uses_left: "0" },
+      { id: "l1", issuer: "@bob:tacita.test", kind: "friend", room_id: null, expires_at: "1", uses_left: "0" },
     ]);
 
     await createPostgresStore(query).consume("empreinte", "@mira:tacita.test", 1_000);
@@ -87,7 +87,7 @@ describe("le schéma est la liste de ce que le service sait", () => {
 describe("la liste est filtrée par émetteur en base, pas en mémoire", () => {
   it("le WHERE porte l'émetteur : tout filtrer côté service enverrait les liens des autres sur le réseau", async () => {
     const { query, textes } = espion();
-    await createPostgresStore(query).listByIssuer("@luca:tacita.test", 1_000);
+    await createPostgresStore(query).listByIssuer("@bob:tacita.test", 1_000);
 
     expect(textes()[0]).toMatch(/WHERE issuer = \$1/);
   });

@@ -42,7 +42,7 @@ const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
  * règle `.m.rule.is_room_mention` des serveurs récents. Le rendu inverse (`@room`
  * réaffiché en `@everyone`) est à l'UI.
  *
- * Limite assumée : seuls les libellés sans espace sont résolus (`@luca`, pas
+ * Limite assumée : seuls les libellés sans espace sont résolus (`@bob`, pas
  * `@Jean Dupont`) — un pseudo à espaces reste du texte. Voir README.md.
  */
 export function parseMentions(

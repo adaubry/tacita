@@ -153,9 +153,9 @@ describe("réactions emoji en clair, métadonnée exposée", () => {
   it("relit les réactions agrégées : emoji, compte, et la mienne", () => {
     const salon = fakeSession({
       reactions: [
-        { key: "👍", sender: "@adam:tacita.test" },
-        { key: "👍", sender: "@luca:tacita.test" },
-        { key: "🎉", sender: "@adam:tacita.test" },
+        { key: "👍", sender: "@alice:tacita.test" },
+        { key: "👍", sender: "@bob:tacita.test" },
+        { key: "🎉", sender: "@alice:tacita.test" },
       ],
     });
 
@@ -168,8 +168,8 @@ describe("réactions emoji en clair, métadonnée exposée", () => {
   it("une réaction retirée ne compte pas — sinon l'emoji reste sans personne derrière", () => {
     const salon = fakeSession({
       reactions: [
-        { key: "👍", sender: "@adam:tacita.test", redacted: true },
-        { key: "👍", sender: "@luca:tacita.test" },
+        { key: "👍", sender: "@alice:tacita.test", redacted: true },
+        { key: "👍", sender: "@bob:tacita.test" },
       ],
     });
 
@@ -184,7 +184,7 @@ describe("réactions emoji en clair, métadonnée exposée", () => {
    */
   it("réagir deux fois avec le même emoji le retire au lieu de l'empiler", async () => {
     const salon = fakeSession({
-      reactions: [{ key: "👍", sender: "@luca:tacita.test", id: "$mienne" }],
+      reactions: [{ key: "👍", sender: "@bob:tacita.test", id: "$mienne" }],
     });
 
     await react(salon.session, ROOM, "$cible", "👍");
@@ -195,7 +195,7 @@ describe("réactions emoji en clair, métadonnée exposée", () => {
 
   it("l'emoji d'un autre n'est pas le mien : réagir l'ajoute, sans rien retirer", async () => {
     const salon = fakeSession({
-      reactions: [{ key: "👍", sender: "@adam:tacita.test", id: "$sienne" }],
+      reactions: [{ key: "👍", sender: "@alice:tacita.test", id: "$sienne" }],
     });
 
     await react(salon.session, ROOM, "$cible", "👍");
@@ -212,10 +212,10 @@ describe("réactions emoji en clair, métadonnée exposée", () => {
   it("un même émetteur ne compte qu'une fois, même s'il a déjà empilé", () => {
     const salon = fakeSession({
       reactions: [
-        { key: "👍", sender: "@adam:tacita.test" },
-        { key: "👍", sender: "@adam:tacita.test" },
-        { key: "👍", sender: "@adam:tacita.test" },
-        { key: "👍", sender: "@luca:tacita.test" },
+        { key: "👍", sender: "@alice:tacita.test" },
+        { key: "👍", sender: "@alice:tacita.test" },
+        { key: "👍", sender: "@alice:tacita.test" },
+        { key: "👍", sender: "@bob:tacita.test" },
       ],
     });
 
@@ -239,20 +239,20 @@ describe("modification, suppression, et droits par message", () => {
   });
 
   it("modifiable seulement par l'auteur", () => {
-    const mien = fakeEvent("$a", { body: "x" }, "@luca:tacita.test");
-    const autre = fakeEvent("$b", { body: "x" }, "@adam:tacita.test");
+    const mien = fakeEvent("$a", { body: "x" }, "@bob:tacita.test");
+    const autre = fakeEvent("$b", { body: "x" }, "@alice:tacita.test");
     expect(canEdit(ctx.session, ROOM, mien as never)).toBe(true);
     expect(canEdit(ctx.session, ROOM, autre as never)).toBe(false);
   });
 
   it("modifiable seulement si l'utilisateur peut encore poster", () => {
     const muet = fakeSession({ maySendEvent: false });
-    const mien = fakeEvent("$a", { body: "x" }, "@luca:tacita.test");
+    const mien = fakeEvent("$a", { body: "x" }, "@bob:tacita.test");
     expect(canEdit(muet.session, ROOM, mien as never)).toBe(false);
   });
 
   it("supprimable selon les droits de redaction du SDK", () => {
-    const event = fakeEvent("$a", { body: "x" }, "@adam:tacita.test");
+    const event = fakeEvent("$a", { body: "x" }, "@alice:tacita.test");
     expect(canRedact(ctx.session, ROOM, event as never)).toBe(true);
     expect(ctx.room.currentState.maySendRedactionForEvent).toHaveBeenCalled();
 
@@ -275,7 +275,7 @@ describe("extraction du texte pour copie", () => {
   });
 
   it("retire la citation que Matrix préfixe aux réponses", () => {
-    const answer = fakeEvent("$a", { body: "> <@adam:tacita.test> question\n\nréponse" });
+    const answer = fakeEvent("$a", { body: "> <@alice:tacita.test> question\n\nréponse" });
     expect(messageText(answer as never)).toBe("réponse");
   });
 
@@ -288,7 +288,7 @@ describe("ordre repris de OrderedTimeline, aucun tri propre", () => {
   it("conserve l'ordre de la timeline malgré des timestamps décroissants", () => {
     ctx.setTimeline([
       fakeEvent("$a", { body: "un" }),
-      fakeEvent("$reaction", {}, "@luca:tacita.test", "m.reaction"),
+      fakeEvent("$reaction", {}, "@bob:tacita.test", "m.reaction"),
       fakeEvent("$b", { body: "deux" }),
     ]);
     expect(messages(ctx.session, ROOM).map((event) => event.getId())).toEqual(["$a", "$b"]);

@@ -7,7 +7,7 @@ import { vi } from "vitest";
 export function fakeEvent(
   id: string,
   content: Record<string, unknown>,
-  sender = "@luca:tacita.test",
+  sender = "@bob:tacita.test",
   type = "m.room.message",
 ) {
   return {
@@ -72,12 +72,12 @@ export interface FakeRoomOptions {
  */
 export function fakeSession(options: FakeRoomOptions = {}) {
   const {
-    members = [fakeMember("@luca:tacita.test", "luca", 100)],
+    members = [fakeMember("@bob:tacita.test", "bob", 100)],
     pinned = [],
     maySendEvent = true,
     mayRedact = true,
     reactions = [],
-    profile = { displayname: "luca" },
+    profile = { displayname: "bob" },
     annuaire = [],
     kickLevel = 50,
     pushRules = { global: {} },
@@ -107,7 +107,7 @@ export function fakeSession(options: FakeRoomOptions = {}) {
     relations: {
       getChildEventsForEvent: vi.fn((_eventId: string, _relType: string, _type: string) => ({
         getRelations: () =>
-          reactions.map(({ key, sender = "@luca:tacita.test", redacted = false, id }, rang) => ({
+          reactions.map(({ key, sender = "@bob:tacita.test", redacted = false, id }, rang) => ({
             ...fakeEvent(id ?? `$reaction-${rang}`, { "m.relates_to": { key } }, sender, "m.reaction"),
             isRedacted: () => redacted,
           })),
@@ -135,7 +135,7 @@ export function fakeSession(options: FakeRoomOptions = {}) {
   const crypto = { isEncryptionEnabledInRoom: vi.fn(async (_roomId: string) => true) };
 
   const client = {
-    getUserId: vi.fn(() => "@luca:tacita.test"),
+    getUserId: vi.fn(() => "@bob:tacita.test"),
     getCrypto: vi.fn(() => crypto),
     getRoom: vi.fn((_roomId: string): typeof room | null => room),
     sendEvent: vi.fn(

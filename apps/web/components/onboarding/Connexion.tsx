@@ -213,7 +213,7 @@ export function Connexion({
                 setEchec(undefined);
               }}
               onEnter={() => void soumettre()}
-              placeholder="adam"
+              placeholder="alice"
               hasAutoFocus
               width="100%"
               status={

@@ -9,7 +9,7 @@ import {
   RINGING_WINDOW_MS,
 } from "../src/index";
 
-const MOI = "@luca:tacita.chat";
+const MOI = "@bob:tacita.chat";
 const AUTRE = "@ana:tacita.chat";
 const TIERS = "@sam:tacita.chat";
 const SALON = "!salon:tacita.chat";

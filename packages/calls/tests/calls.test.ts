@@ -21,7 +21,7 @@ import {
 
 const HOMESERVER = "https://tacita.chat";
 const SALON = "!salon:tacita.chat";
-const MOI = "@luca:tacita.chat";
+const MOI = "@bob:tacita.chat";
 const APPAREIL = "DEVICE1";
 const FOCUS = { type: "livekit", livekit_service_url: "https://tacita.chat/livekit/jwt" };
 
@@ -312,7 +312,7 @@ describe("littéraux MatrixRTC centralisés dans un seul fichier", () => {
   });
 
   it("construit la state key attendue par le SDK déployé", () => {
-    expect(callMemberStateKey(MOI, APPAREIL)).toBe("_@luca:tacita.chat_DEVICE1_m.call");
+    expect(callMemberStateKey(MOI, APPAREIL)).toBe("_@bob:tacita.chat_DEVICE1_m.call");
   });
 });
 

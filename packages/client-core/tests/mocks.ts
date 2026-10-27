@@ -123,7 +123,7 @@ function makeClient(crypto: CryptoMock) {
   return {
     loginRequest: vi.fn(async (_data: unknown) => ({
       access_token: "syt_access",
-      user_id: "@luca:tacita.test",
+      user_id: "@bob:tacita.test",
       device_id: "DEVICE1",
     })),
     /**
@@ -136,7 +136,7 @@ function makeClient(crypto: CryptoMock) {
         _corps: { username?: string; password?: string; auth?: { type: string } },
       ): Promise<{ access_token?: string; user_id: string; device_id?: string }> => ({
         access_token: "syt_access",
-        user_id: "@luca:tacita.test",
+        user_id: "@bob:tacita.test",
         device_id: "DEVICE1",
       }),
     ),
@@ -148,7 +148,7 @@ function makeClient(crypto: CryptoMock) {
      * tests qui veulent un jeton refusé le disent explicitement, et ceux qui n'en
      * parlent pas ne doivent pas se voir refuser une session valable.
      */
-    whoami: vi.fn(async () => ({ user_id: "@luca:tacita.test" })),
+    whoami: vi.fn(async () => ({ user_id: "@bob:tacita.test" })),
     /**
      * le secret storage tel que `unlockRecovery` l'interroge : quelle clé
      * protège ce compte, et celle qu'on lui présente est-elle la bonne. `checkKey` accepte

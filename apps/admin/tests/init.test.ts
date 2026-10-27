@@ -8,7 +8,7 @@ import { genererVapid, planifier, resteAFaire, valider } from "../src/init.ts";
 import { clesGarage, lireEnv } from "../src/verifications.ts";
 import { monde } from "./monde.ts";
 
-const REPONSES = { domaine: "chat.tacita.fr", email: "adam@tacita.fr" };
+const REPONSES = { domaine: "chat.tacita.fr", email: "alice@tacita.fr" };
 
 /** Un extrait fidèle de `.env.example` : commentaires compris, ce sont eux qui documentent. */
 const EXEMPLE = `# Copie en .env, ne jamais committer .env (secrets réels)
@@ -69,7 +69,7 @@ describe("la préparation d'infra/.env depuis l'exemple", () => {
     expect(valeurs.get("VAPID_PRIVATE_KEY")).toHaveLength(43);
     expect((await clesGarage.verifier(monde({ env: valeurs }))).etat).toBe("ok");
     expect(valeurs.get("SERVER_NAME")).toBe("chat.tacita.fr");
-    expect(valeurs.get("VAPID_SUBJECT")).toBe("mailto:adam@tacita.fr");
+    expect(valeurs.get("VAPID_SUBJECT")).toBe("mailto:alice@tacita.fr");
   });
 
   it("préserve les commentaires et l'ordre, qui portent l'essentiel de la documentation", () => {
@@ -157,10 +157,10 @@ describe("la relance, qui ne doit rien casser de ce qui tourne déjà", () => {
 
 describe("la validation des deux réponses, refusée tôt plutôt que payée au certificat", () => {
   it.each([
-    [{ domaine: "chat.tacita.fr", email: "adam@tacita.fr" }, undefined],
-    [{ domaine: "pas un domaine", email: "adam@tacita.fr" }, /nom de domaine/],
-    [{ domaine: "localhost", email: "adam@tacita.fr" }, /nom de domaine/],
-    [{ domaine: "chat.example.org", email: "adam@tacita.fr" }, /ne résoudra jamais/],
+    [{ domaine: "chat.tacita.fr", email: "alice@tacita.fr" }, undefined],
+    [{ domaine: "pas un domaine", email: "alice@tacita.fr" }, /nom de domaine/],
+    [{ domaine: "localhost", email: "alice@tacita.fr" }, /nom de domaine/],
+    [{ domaine: "chat.example.org", email: "alice@tacita.fr" }, /ne résoudra jamais/],
     [{ domaine: "chat.tacita.fr", email: "pas-une-adresse" }, /e-mail/],
   ])("%o", (reponses, attendu) => {
     const probleme = valider(reponses);
@@ -234,7 +234,7 @@ describe("le fichier écrit ne laisse pas ses secrets lisibles par la machine", 
         join(racine, "apps", "admin", "src", "index.ts"),
         "init",
         "--domaine=chat.tacita.fr",
-        "--email=adam@tacita.fr",
+        "--email=alice@tacita.fr",
       ],
       { stdio: "pipe", encoding: "utf-8" },
     );

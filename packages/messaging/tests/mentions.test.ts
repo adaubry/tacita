@@ -10,8 +10,8 @@ let ctx: ReturnType<typeof fakeSession>;
 beforeEach(() => {
   ctx = fakeSession({
     members: [
-      fakeMember("@luca:tacita.test", "luca", 100),
-      fakeMember("@adam:tacita.test", "adam"),
+      fakeMember("@bob:tacita.test", "bob", 100),
+      fakeMember("@alice:tacita.test", "alice"),
       fakeMember("@jean:tacita.test", "Jean Dupont"),
     ],
   });
@@ -44,12 +44,12 @@ describe("mentions type Discord, @everyone mappé sur @room", () => {
 
   it("résout les pseudos et les identifiants complets en user_ids", () => {
     const candidates = mentionCandidates(ctx.session, ROOM);
-    expect(parseMentions("hé @adam", candidates)["m.mentions"].user_ids).toEqual([
-      "@adam:tacita.test",
+    expect(parseMentions("hé @alice", candidates)["m.mentions"].user_ids).toEqual([
+      "@alice:tacita.test",
     ]);
     expect(
-      parseMentions("hé @luca:tacita.test", candidates)["m.mentions"].user_ids,
-    ).toEqual(["@luca:tacita.test"]);
+      parseMentions("hé @bob:tacita.test", candidates)["m.mentions"].user_ids,
+    ).toEqual(["@bob:tacita.test"]);
   });
 
   it("un pseudo à espaces reste du texte — limite assumée", () => {
@@ -60,8 +60,8 @@ describe("mentions type Discord, @everyone mappé sur @room", () => {
   it("l'autocomplétion propose @everyone puis les membres du salon", () => {
     expect(mentionCandidates(ctx.session, ROOM)).toEqual([
       { id: ROOM_MENTION, label: "everyone" },
-      { id: "@luca:tacita.test", label: "luca" },
-      { id: "@adam:tacita.test", label: "adam" },
+      { id: "@bob:tacita.test", label: "bob" },
+      { id: "@alice:tacita.test", label: "alice" },
       { id: "@jean:tacita.test", label: "Jean Dupont" },
     ]);
   });

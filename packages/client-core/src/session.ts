@@ -52,7 +52,7 @@ export interface SessionConfig {
    * conservé** — ni en mémoire après l'appel, ni en IndexedDB, où seuls l'`access_token`
    * et l'identité d'appareil sont écrits (`StoredCredentials`).
    *
-   * `identifiant` est le localpart (`adam`), pas l'identifiant complet : c'est ce que
+   * `identifiant` est le localpart (`alice`), pas l'identifiant complet : c'est ce que
    * l'écran de connexion demande, et `m.login.password` l'accepte tel quel via un
    * `identifier` de type `m.id.user`.
    */

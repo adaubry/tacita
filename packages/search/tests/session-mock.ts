@@ -52,7 +52,7 @@ export function matrixEvent(
   return {
     getId: () => eventId,
     getRoomId: () => roomId,
-    getSender: () => options.sender ?? "@luca:tacita.test",
+    getSender: () => options.sender ?? "@bob:tacita.test",
     getType: () => options.type ?? "m.room.message",
     getTs: () => options.ts ?? 1_000,
     getContent: () => content,

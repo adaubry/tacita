@@ -569,7 +569,9 @@ describe("l'unique chemin public du pipeline, et son site d'appel unique", () =>
     // Deux, et l'assertion reste une **égalité** : ce qui compte
     // n'est pas le nombre mais la liste, chaque entrée ayant été relue une fois.
     const racine = new URL("../../../", import.meta.url).pathname;
-    const ignores = new Set(["node_modules", ".next", ".git", "dist", "tsconfig.tsbuildinfo"]);
+    // `.claude` : l'app y crée les worktrees des sessions parallèles, copies entières du
+    // dépôt — sans l'exclure, chaque site d'appel se compte en double et l'égalité casse.
+    const ignores = new Set(["node_modules", ".next", ".git", ".claude", "dist", "tsconfig.tsbuildinfo"]);
     const appelants: string[] = [];
 
     const parcourir = (dossier: string) => {

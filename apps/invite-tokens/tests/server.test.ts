@@ -7,12 +7,12 @@ import type { MatrixReader } from "../src/matrix.ts";
 import { createInviteService, createRateLimit } from "../src/server.ts";
 import { createMemoryStore } from "./memory-store.ts";
 
-const LUCA = "@luca:tacita.test";
+const BOB = "@bob:tacita.test";
 const MIRA = "@mira:tacita.test";
 const SALON = "!groupe:tacita.test";
 
 const matrix = {
-  whoami: vi.fn(async (token: string) => ({ "jeton-luca": LUCA, "jeton-mira": MIRA })[token]),
+  whoami: vi.fn(async (token: string) => ({ "jeton-bob": BOB, "jeton-mira": MIRA })[token]),
   ignores: vi.fn(async () => false),
   accountExists: vi.fn(async () => true),
 } satisfies MatrixReader;
@@ -57,7 +57,7 @@ const appel = async (
   return { status: response.status, body: texte ? (JSON.parse(texte) as never) : undefined };
 };
 
-const créer = async (body: unknown = { kind: "friend" }, token = "jeton-luca") =>
+const créer = async (body: unknown = { kind: "friend" }, token = "jeton-bob") =>
   (await appel("POST", "/links", { token, body })).body as unknown as {
     id: string;
     token: string;
@@ -68,7 +68,7 @@ describe("POST /links, authentification obligatoire", () => {
   it("crée avec un jeton valide, refuse sans", async () => {
     expect((await appel("POST", "/links", { body: { kind: "friend" } })).status).toBe(401);
 
-    const créé = await appel("POST", "/links", { token: "jeton-luca", body: { kind: "friend" } });
+    const créé = await appel("POST", "/links", { token: "jeton-bob", body: { kind: "friend" } });
     expect(créé.status).toBe(201);
     expect(créé.body).toMatchObject({ token: expect.any(String), expiresAt: expect.any(Number) });
   });
@@ -76,7 +76,7 @@ describe("POST /links, authentification obligatoire", () => {
   it("un corps illisible est un refus, pas un 500", async () => {
     const response = await fetch(`${base}/links`, {
       method: "POST",
-      headers: { authorization: "Bearer jeton-luca", "content-type": "application/json" },
+      headers: { authorization: "Bearer jeton-bob", "content-type": "application/json" },
       body: "{ pas du json",
     });
     expect(response.status).toBe(400);
@@ -89,8 +89,8 @@ describe("GET /links ne rend que les liens de l'appelant", () => {
     await créer();
     await créer({ kind: "friend" }, "jeton-mira");
 
-    const luca = await appel("GET", "/links", { token: "jeton-luca" });
-    expect(luca.body).toHaveLength(1);
+    const bob = await appel("GET", "/links", { token: "jeton-bob" });
+    expect(bob.body).toHaveLength(1);
     expect((await appel("GET", "/links", { token: "jeton-mira" })).body).toHaveLength(1);
   });
 });
@@ -100,7 +100,7 @@ describe("DELETE /links/:id révoque", () => {
     const { id, token } = await créer();
 
     expect((await appel("DELETE", `/links/${id}`, { token: "jeton-mira" })).status).toBe(404);
-    expect((await appel("DELETE", `/links/${id}`, { token: "jeton-luca" })).status).toBe(204);
+    expect((await appel("DELETE", `/links/${id}`, { token: "jeton-bob" })).status).toBe(204);
     expect((await appel("POST", `/links/${token}/resolve`, { token: "jeton-mira" })).status).toBe(404);
   });
 });
@@ -111,7 +111,7 @@ describe("POST /links/:token/resolve rend l'identifiant", () => {
 
     const résolu = await appel("POST", `/links/${token}/resolve`, { token: "jeton-mira" });
     expect(résolu.status).toBe(200);
-    expect(résolu.body).toEqual({ kind: "group", issuer: LUCA, roomId: SALON });
+    expect(résolu.body).toEqual({ kind: "group", issuer: BOB, roomId: SALON });
   });
 
   it("une route inconnue ne dit rien de plus qu'un 404", async () => {
@@ -156,12 +156,12 @@ describe("aucun identifiant, aucun roomId, aucun token dans les logs", () => {
   it("le journal porte l'issue et le gabarit de route, jamais qui", async () => {
     const { id, token } = await créer({ kind: "group", roomId: SALON });
     await appel("POST", `/links/${token}/resolve`, { token: "jeton-mira" });
-    await appel("DELETE", `/links/${id}`, { token: "jeton-luca" });
+    await appel("DELETE", `/links/${id}`, { token: "jeton-bob" });
     await appel("POST", `/links/${token}/resolve`, { token: "jeton-inconnu" });
 
     expect(journal.length).toBeGreaterThan(3);
     const tout = JSON.stringify(journal);
-    for (const secret of [token, id, LUCA, MIRA, SALON, "jeton-luca"]) {
+    for (const secret of [token, id, BOB, MIRA, SALON, "jeton-bob"]) {
       expect(tout).not.toContain(secret);
     }
 
@@ -180,12 +180,12 @@ describe("aucun identifiant, aucun roomId, aucun token dans les logs", () => {
 
   it("une panne interne ne renvoie pas non plus le détail au client", async () => {
     store.find = async () => {
-      throw new Error(`base injoignable pour ${LUCA}`);
+      throw new Error(`base injoignable pour ${BOB}`);
     };
     const { token } = await créer();
 
     const réponse = await appel("POST", `/links/${token}/resolve`, { token: "jeton-mira" });
     expect(réponse).toEqual({ status: 500, body: { errcode: "TACITA_INTERNAL" } });
-    expect(JSON.stringify(journal)).not.toContain(LUCA);
+    expect(JSON.stringify(journal)).not.toContain(BOB);
   });
 });
