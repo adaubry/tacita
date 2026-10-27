@@ -72,7 +72,13 @@ import { Composer } from "./Composer";
 import { ConversationStarter } from "./ConversationStarter";
 import { HoldMenu } from "./HoldMenu";
 import { Timeline } from "./Timeline";
-import { apercu, citation, depuisFile, type MessageAffiche } from "./message";
+import {
+  apercu,
+  citation,
+  depuisFile,
+  sansEchoDeFile,
+  type MessageAffiche,
+} from "./message";
 
 /** Ce que le composer est en train de faire : rien, une réponse, ou une modification. */
 type Intention =
@@ -291,7 +297,12 @@ export function Conversation({ roomId }: { roomId: string }) {
     if (!session) return [];
     const moi = session.client.getUserId() ?? "";
 
-    const lus = listerMessages(session, roomId).map((evenement) => {
+    // La file est lue une fois : elle sert deux fois, à masquer l'écho local du SDK
+    // (`sansEchoDeFile`) puis à poser les entrées qui attendent encore.
+    const enAttente = outbox?.pending(roomId) ?? [];
+    const enFile = new Set(enAttente.map((entree) => entree.txnId));
+
+    const lus = sansEchoDeFile(listerMessages(session, roomId), enFile).map((evenement) => {
       const auteur = evenement.getSender() ?? "";
       return {
         // l'événement cité, lu par le paquet : le `body` porte bien une
@@ -332,7 +343,7 @@ export function Conversation({ roomId }: { roomId: string }) {
 
     // Une réponse encore en file se cite comme une autre : c'est le propre de l'envoi
     // optimiste, et c'est le message qu'on vient d'écrire — celui qu'on regarde.
-    const attente = (outbox?.pending(roomId) ?? []).map((entree) =>
+    const attente = enAttente.map((entree) =>
       citer(replyToOf(entree.content), depuisFile(entree, nomDe(moi), moi, avatarDe(moi))),
     );
     // les entrées en attente vont **à la fin**, sans exception : elles n'ont
