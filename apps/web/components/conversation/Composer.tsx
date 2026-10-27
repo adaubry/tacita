@@ -167,8 +167,20 @@ export function Composer({
       )}
 
       {/* `flex-end` et non `center` : quand le champ grandit sur plusieurs lignes, les
-          quatre boutons restent au niveau de la ligne qu'on est en train d'écrire. */}
-      <div style={{ display: "flex", alignItems: "flex-end", gap: "var(--spacing-1)" }}>
+          quatre boutons restent au niveau de la ligne qu'on est en train d'écrire.
+
+          `position: relative` : la rangée est le repère de la barre d'enregistrement, que
+          `EnregistreurVocal` pose en absolu par-dessus pendant qu'on parle. Elle a besoin
+          de couvrir la rangée **entière** — poubelle à un bout, micro à l'autre —, et
+          seule la rangée en connaît les bords. */}
+      <div
+        style={{
+          position: "relative",
+          display: "flex",
+          alignItems: "flex-end",
+          gap: "var(--spacing-1)",
+        }}
+      >
         {actions}
 
         {/* DESIGN.md e1 — le champ est la seule surface de la rangée : `surface` + filet,

@@ -1260,6 +1260,95 @@ describe("enregistreur vocal", () => {
     expect(envoye).not.toHaveBeenCalled();
   });
 
+  /**
+   * **Le maintien.** jsdom n'a ni `PointerEvent` ni `setPointerCapture` : on dispatche
+   * des `MouseEvent` sous le nom des événements pointeur — ils portent `clientX`, qui est
+   * tout ce que le composant lit — et la capture est appelée en facultatif.
+   */
+  const doigt = (cible: HTMLElement, type: string, clientX: number) =>
+    fireEvent(cible, new MouseEvent(type, { bubbles: true, clientX, clientY: 0 }));
+
+  const micBouton = () => screen.getByRole("button", { name: "Enregistrer un message vocal" });
+  /**
+   * Le micro, une fois l'enregistrement ouvert — c'est le même nœud, qui a changé de
+   * libellé. **Les mouvements se dispatchent dessus et non sur la barre** : au navigateur,
+   * la capture de pointeur les y ramène où que soit le doigt ; jsdom n'a pas la capture,
+   * et la barre est une sœur du bouton, pas son parent.
+   */
+  const micTenu = () => screen.getByRole("button", { name: "Envoyer le message vocal" });
+
+  it("appuyer ouvre le micro, relâcher envoie — sans second appui", async () => {
+    avance(1000);
+    const envoye = vi.fn();
+    render(<EnregistreurVocal onEnvoyer={envoye} portee={micro()} />);
+
+    doigt(micBouton(), "pointerdown", 300);
+    // La poubelle n'existe qu'à partir de là : un composer n'en porte pas en permanence.
+    await screen.findByRole("group", { name: "Enregistrement en cours" });
+    expect(screen.getByRole("button", { name: "Annuler l'enregistrement" })).toBeTruthy();
+
+    doigt(micTenu(), "pointerup", 300);
+    await waitFor(() => expect(envoye).toHaveBeenCalledTimes(1));
+  });
+
+  it("glisser jusqu'à la poubelle annule, et rien ne part", async () => {
+    avance(1000);
+    const envoye = vi.fn();
+    const arretees = pistes();
+    render(<EnregistreurVocal onEnvoyer={envoye} portee={micro(arretees)} />);
+
+    doigt(micBouton(), "pointerdown", 300);
+    await screen.findByRole("group", { name: "Enregistrement en cours" });
+
+    // 300 → 200 : au-delà des 72 px de course, le geste bascule et le dit.
+    doigt(micTenu(), "pointermove", 200);
+    expect(screen.getByText("Relâchez pour annuler")).toBeTruthy();
+
+    doigt(micTenu(), "pointerup", 200);
+    await waitFor(() => expect(arretees[0]!.stop).toHaveBeenCalled());
+    expect(envoye).not.toHaveBeenCalled();
+  });
+
+  it("le pouce peut rouler sans annuler : la zone morte tient", async () => {
+    avance(1000);
+    const envoye = vi.fn();
+    render(<EnregistreurVocal onEnvoyer={envoye} portee={micro()} />);
+
+    doigt(micBouton(), "pointerdown", 300);
+    await screen.findByRole("group", { name: "Enregistrement en cours" });
+
+    // 40 px vers la gauche — un pouce qui tient un bouton ne reste pas immobile.
+    doigt(micTenu(), "pointermove", 260);
+    expect(screen.getByText(/Glissez vers la poubelle/)).toBeTruthy();
+
+    doigt(micTenu(), "pointerup", 260);
+    await waitFor(() => expect(envoye).toHaveBeenCalledTimes(1));
+  });
+
+  it("un doigt levé avant l'ouverture du micro n'allume rien pour rien", async () => {
+    avance(0);
+    const envoye = vi.fn();
+    const arretees = pistes();
+    let ouvrir: (flux: unknown) => void = () => {};
+    const attente = new Promise((resoudre) => {
+      ouvrir = resoudre;
+    });
+
+    render(<EnregistreurVocal onEnvoyer={envoye} portee={portee(() => attente)} />);
+
+    // `getUserMedia` attend encore — la toute première fois, c'est la demande de
+    // permission. Le doigt, lui, est déjà reparti.
+    doigt(micBouton(), "pointerdown", 300);
+    doigt(micBouton(), "pointerup", 300);
+    ouvrir({ getTracks: () => arretees });
+
+    // L'enregistrement s'ouvre puis se referme aussitôt : micro éteint, rien d'envoyé,
+    // et surtout pas une pastille d'enregistrement qui reste allumée sans rien à l'écran.
+    await waitFor(() => expect(arretees[0]!.stop).toHaveBeenCalled());
+    expect(envoye).not.toHaveBeenCalled();
+    expect(screen.queryByRole("group", { name: "Enregistrement en cours" })).toBeNull();
+  });
+
   it("dit en toutes lettres qu'on a refusé le micro, et laisse réessayer", async () => {
     const refus = Object.assign(new Error("refus"), { name: "NotAllowedError" });
     render(
