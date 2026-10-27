@@ -87,7 +87,7 @@ describe("bannière : champ étendu, lu sans requête de plus", () => {
   it("ne changer que le nom n'écrit aucun champ étendu", async () => {
     const { session, client } = fakeSession();
 
-    await updateProfile(session, { displayName: "adam" });
+    await updateProfile(session, { displayName: "alice" });
     expect(client.setExtendedProfileProperty).not.toHaveBeenCalled();
 
     await updateProfile(session, { bannerUrl: "mxc://tacita.test/b" });
@@ -132,8 +132,8 @@ describe("profil : lecture tolérante, écriture sélective", () => {
   it("ne changer que le nom n'efface pas la photo", async () => {
     const { session, client } = fakeSession();
 
-    await updateProfile(session, { displayName: "adam" });
-    expect(client.setDisplayName).toHaveBeenCalledWith("adam");
+    await updateProfile(session, { displayName: "alice" });
+    expect(client.setDisplayName).toHaveBeenCalledWith("alice");
     expect(client.setAvatarUrl).not.toHaveBeenCalled();
 
     await updateProfile(session, { avatarUrl: "mxc://tacita.test/nouveau" });
@@ -187,7 +187,7 @@ describe("un identifiant complet se résout par son profil", () => {
 
     expect(client.searchUserDirectory).not.toHaveBeenCalled();
     expect(client.getProfileInfo).toHaveBeenCalledWith(MIRA);
-    expect(trouves).toEqual([{ userId: MIRA, displayName: "luca", avatarUrl: undefined }]);
+    expect(trouves).toEqual([{ userId: MIRA, displayName: "bob", avatarUrl: undefined }]);
   });
 
   it("un identifiant que le serveur ne connaît pas ne rend rien", async () => {
@@ -214,7 +214,7 @@ describe("le domaine ne se saisit pas", () => {
    */
   it("complète un localpart avec le domaine du compte courant", async () => {
     const { session, client } = fakeSession();
-    // Le compte courant du mock est `@luca:tacita.test` : c'est de lui que vient le
+    // Le compte courant du mock est `@bob:tacita.test` : c'est de lui que vient le
     // domaine, jamais d'une constante recopiée.
     await searchUsers(session, "mira");
     expect(client.getProfileInfo).toHaveBeenCalledWith(MIRA);
@@ -241,7 +241,7 @@ describe("le domaine ne se saisit pas", () => {
     client.searchUserDirectory.mockRejectedValueOnce(new Error("M_FORBIDDEN"));
 
     await expect(searchUsers(session, "mira")).resolves.toEqual([
-      { userId: MIRA, displayName: "luca", avatarUrl: undefined },
+      { userId: MIRA, displayName: "bob", avatarUrl: undefined },
     ]);
   });
 
@@ -269,11 +269,11 @@ describe("le domaine ne se saisit pas", () => {
   });
 
   it("identifiantComplet est pur et rend la forme canonique, ou rien", () => {
-    expect(identifiantComplet("adam", "tacita.test")).toBe("@adam:tacita.test");
-    expect(identifiantComplet(" @adam ", "tacita.test")).toBe("@adam:tacita.test");
-    expect(identifiantComplet("@adam:autre.test", "tacita.test")).toBe("@adam:autre.test");
-    expect(identifiantComplet("Adam Dupont", "tacita.test")).toBeUndefined();
+    expect(identifiantComplet("alice", "tacita.test")).toBe("@alice:tacita.test");
+    expect(identifiantComplet(" @alice ", "tacita.test")).toBe("@alice:tacita.test");
+    expect(identifiantComplet("@alice:autre.test", "tacita.test")).toBe("@alice:autre.test");
+    expect(identifiantComplet("Alice Dupont", "tacita.test")).toBeUndefined();
     // Sans domaine connu — session sans identifiant —, on n'invente rien.
-    expect(identifiantComplet("adam", undefined)).toBeUndefined();
+    expect(identifiantComplet("alice", undefined)).toBeUndefined();
   });
 });

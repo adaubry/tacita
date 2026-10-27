@@ -24,7 +24,7 @@ const event = (
 ): IndexableEvent => ({
   eventId: `$e${n}`,
   roomId,
-  sender: "@luca:tacita.test",
+  sender: "@bob:tacita.test",
   tsOrigin,
   body,
   msgtype: "m.text",
@@ -127,7 +127,7 @@ describe("recherche globale et par salon", () => {
 });
 
 describe("recherche filtrée, critères combinables et locaux", () => {
-  const LUCA = "@luca:tacita.test";
+  const BOB = "@bob:tacita.test";
   const MIRA = "@mira:tacita.test";
 
   beforeEach(async () => {
@@ -135,7 +135,7 @@ describe("recherche filtrée, critères combinables et locaux", () => {
       event(1, "réunion demain", ROOM, 1_000, { mentions: [MIRA] }),
       event(2, "réunion annulée", ROOM, 2_000, { sender: MIRA }),
       event(3, "photo réunion.jpg", ROOM, 3_000, { msgtype: "m.image" }),
-      event(4, "réunion de crise", AUTRE, 4_000, { sender: MIRA, mentions: [LUCA] }),
+      event(4, "réunion de crise", AUTRE, 4_000, { sender: MIRA, mentions: [BOB] }),
       event(5, "réunion générale", ROOM, 5_000, { mentions: ["@room"] }),
     ]);
   });
@@ -158,11 +158,11 @@ describe("recherche filtrée, critères combinables et locaux", () => {
   });
 
   it("l'onglet Mentions se sert du champ, sans plein-texte sur un nom d'affichage", async () => {
-    // Terme vide : on ne cherche pas un mot, on filtre. Chercher « luca » aurait rendu
+    // Terme vide : on ne cherche pas un mot, on filtre. Chercher « bob » aurait rendu
     // les messages qui *parlent* de lui, et raté ceux qui le mentionnent en pièce jointe.
-    expect(await ids("", { mentions: LUCA })).toEqual(["$e4"]);
+    expect(await ids("", { mentions: BOB })).toEqual(["$e4"]);
     // Une mention de salon en est une pour chacun : l'UI passe les deux.
-    expect(await ids("", { mentions: [LUCA, "@room"] })).toEqual(["$e4", "$e5"]);
+    expect(await ids("", { mentions: [BOB, "@room"] })).toEqual(["$e4", "$e5"]);
     expect(await ids("", { mentions: "@inconnu:tacita.test" })).toEqual([]);
   });
 
@@ -183,12 +183,12 @@ describe("recherche filtrée, critères combinables et locaux", () => {
   it("deux critères combinés rendent l'intersection", async () => {
     expect(await ids("réunion", { sender: MIRA, roomId: AUTRE })).toEqual(["$e4"]);
     expect(await ids("réunion", { sender: MIRA, msgtype: "m.image" })).toEqual([]);
-    expect(await ids("réunion", { mentions: LUCA, since: 5_000 })).toEqual([]);
+    expect(await ids("réunion", { mentions: BOB, since: 5_000 })).toEqual([]);
   });
 
   it("le hit porte les deux champs ajoutés, pour que l'UI n'ait rien à redériver", async () => {
     const [hit] = await engine.search("crise");
-    expect(hit).toMatchObject({ msgtype: "m.text", mentions: [LUCA], sender: MIRA });
+    expect(hit).toMatchObject({ msgtype: "m.text", mentions: [BOB], sender: MIRA });
   });
 });
 

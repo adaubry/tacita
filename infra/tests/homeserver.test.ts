@@ -122,16 +122,49 @@ describe("rétention illimitée, définie explicitement", () => {
   });
 });
 
-describe("backend média S3", () => {
+const garageToml = readFileSync(new URL("../garage/garage.toml", import.meta.url), "utf-8");
+const regionDeGarage = /^s3_region\s*=\s*"([^"]+)"/m.exec(garageToml)?.[1];
+
+describe("backend média S3 — Garage", () => {
+  const [provider] = homeserver.media_storage_providers;
+
   it("media_storage_providers utilise s3_storage_provider.S3StorageProviderBackend", () => {
-    const [provider] = homeserver.media_storage_providers;
     expect(provider.module).toBe("s3_storage_provider.S3StorageProviderBackend");
     expect(provider.config.bucket).toBeTruthy();
   });
 
-  it("SSE-S3 est activé au niveau du bucket (défense en profondeur)", () => {
-    const initCommand = compose.services["minio-init"].command.join(" ");
-    expect(initCommand).toContain("mc encrypt set sse-s3");
+  it("Synapse joint Garage par son nom sur le réseau du compose", () => {
+    expect(provider.config.endpoint_url).toBe("http://garage:3900");
+  });
+
+  it("la région signée est celle que Garage vérifie", () => {
+    // Garage contrôle la région de la signature SigV4. Sans `region_name`, boto3 signe pour
+    // us-east-1 : les uploads passent, et chaque GET/HEAD répond 400 — vérifié sur v2.5.0.
+    // Un bucket qui se remplit et ne rend rien, c'est le symptôme qu'on évite ici.
+    expect(regionDeGarage).toBeTruthy();
+    expect(provider.config.region_name).toBe(regionDeGarage);
+  });
+
+  it("Garage s'amorce depuis le .env — layout, clé, bucket — sans job d'init", () => {
+    const garage = compose.services.garage;
+    expect(garage.command).toEqual(["/garage", "server", "--single-node", "--default-bucket"]);
+    expect(garage.environment.GARAGE_DEFAULT_BUCKET).toBe("${S3_BUCKET}");
+    expect(garage.environment.GARAGE_DEFAULT_ACCESS_KEY).toBe("${S3_ACCESS_KEY_ID}");
+    expect(garage.environment.GARAGE_DEFAULT_SECRET_KEY).toBe("${S3_SECRET_ACCESS_KEY}");
+    expect(garage.environment.GARAGE_RPC_SECRET).toBe("${GARAGE_RPC_SECRET}");
+  });
+
+  it("Synapse attend un Garage sain : store_synchronous rend chaque upload tributaire du bucket", () => {
+    expect(provider.store_synchronous).toBe(true);
+    expect(compose.services.synapse.depends_on.garage).toEqual({ condition: "service_healthy" });
+    // Le healthcheck interroge le bucket de l'amorçage, pas seulement le processus.
+    expect(compose.services.garage.healthcheck.test).toEqual([
+      "CMD",
+      "/garage",
+      "bucket",
+      "info",
+      "${S3_BUCKET}",
+    ]);
   });
 });
 

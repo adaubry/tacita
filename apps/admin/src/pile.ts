@@ -59,9 +59,6 @@ const conteneursDe = async ({ executer }: Contexte): Promise<Conteneur[] | undef
   return code === 0 ? lireConteneurs(sortie) : undefined;
 };
 
-/** Le job d'initialisation de MinIO sort en 0 et reste « exited » : c'est son état normal. */
-const JOBS = new Set(["minio-init"]);
-
 export const pileDemarree: Verification = {
   nom: "pile",
   phase: PHASE,
@@ -87,7 +84,6 @@ export const servicesEnBonneSante: Verification = {
       return attente("services", "en attente du démarrage de la pile");
 
     const fautifs = conteneurs
-      .filter((c) => !JOBS.has(c.Service))
       .filter((c) => c.State !== "running" || c.Health === "unhealthy")
       .map((c) => `${c.Service} (${c.Health === "unhealthy" ? "unhealthy" : c.State})`);
 
@@ -132,23 +128,21 @@ export const servicesQuiBouclent: Verification = {
       return attente("redémarrages", "en attente du démarrage de la pile");
 
     const etats = await Promise.all(
-      conteneurs
-        .filter((c) => !JOBS.has(c.Service))
-        .map(async (c) => {
-          const { code, sortie } = await ctx.executer("docker", [
-            "inspect",
-            "-f",
-            "{{.RestartCount}} {{.State.Restarting}} {{.State.StartedAt}}",
-            c.Name,
-          ]);
-          const [compte, redemarre, depuis] = sortie.trim().split(/\s+/);
-          return {
-            service: c.Service,
-            compte: code === 0 ? Number(compte) : 0,
-            redemarre: redemarre === "true",
-            secondesDebout: (ctx.maintenant.getTime() - Date.parse(depuis ?? "")) / 1000,
-          };
-        }),
+      conteneurs.map(async (c) => {
+        const { code, sortie } = await ctx.executer("docker", [
+          "inspect",
+          "-f",
+          "{{.RestartCount}} {{.State.Restarting}} {{.State.StartedAt}}",
+          c.Name,
+        ]);
+        const [compte, redemarre, depuis] = sortie.trim().split(/\s+/);
+        return {
+          service: c.Service,
+          compte: code === 0 ? Number(compte) : 0,
+          redemarre: redemarre === "true",
+          secondesDebout: (ctx.maintenant.getTime() - Date.parse(depuis ?? "")) / 1000,
+        };
+      }),
     );
 
     const boucleurs = etats

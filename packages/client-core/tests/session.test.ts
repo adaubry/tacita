@@ -32,7 +32,7 @@ beforeEach(() => {
   ({ crypto, client } = resetSdk());
   config = {
     homeserverUrl: "https://tacita.test",
-    identifiant: "luca",
+    identifiant: "bob",
     motDePasse: "motdepasse-essai",
     indexedDB: new IDBFactory(),
   };
@@ -249,12 +249,12 @@ describe("identifiant et mot de passe, portés par Synapse", () => {
      */
     expect(client.loginRequest).toHaveBeenCalledWith({
       type: "m.login.password",
-      identifier: { type: "m.id.user", user: "luca" },
+      identifier: { type: "m.id.user", user: "bob" },
       password: "motdepasse-essai",
     });
     expect(clientOpts()).toMatchObject({
       accessToken: "syt_access",
-      userId: "@luca:tacita.test",
+      userId: "@bob:tacita.test",
       deviceId: "DEVICE1",
     });
   });
@@ -290,7 +290,7 @@ describe("reprise de session sans réseau", () => {
     expect(client.loginRequest).not.toHaveBeenCalled();
     expect(clientOpts()).toMatchObject({
       accessToken: "syt_access",
-      userId: "@luca:tacita.test",
+      userId: "@bob:tacita.test",
       deviceId: "DEVICE1",
     });
   });

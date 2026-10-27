@@ -13,8 +13,8 @@ import {
 } from "../src";
 import { fakeEvent } from "./session-mock";
 
-const MOI = "@luca:tacita.test";
-const ADAM = "@adam:tacita.test";
+const MOI = "@bob:tacita.test";
+const ALICE = "@alice:tacita.test";
 
 interface SalonFictif {
   roomId: string;
@@ -86,7 +86,7 @@ function fakeClient(salons: SalonFictif[], directs: Record<string, string[]> = {
       events: () =>
         (salons.find((salon) => salon.roomId === roomId)?.messages ?? []).map(
           ({ texte, ts }) =>
-            ({ ...fakeEvent("$e", { body: texte }, ADAM), getTs: () => ts }) as unknown as MatrixEvent,
+            ({ ...fakeEvent("$e", { body: texte }, ALICE), getTs: () => ts }) as unknown as MatrixEvent,
         ),
       paginate: async () => false,
     }),
@@ -122,26 +122,26 @@ describe("liste des conversations, compteurs natifs, invitations à part", () =>
   it("distingue DM et groupe par `m.direct`, et expose l'autre membre", () => {
     const { session } = fakeClient(
       [
-        { roomId: "!dm:t", name: "adam" },
+        { roomId: "!dm:t", name: "alice" },
         { roomId: "!groupe:t", name: "équipe" },
       ],
-      { [ADAM]: ["!dm:t"] },
+      { [ALICE]: ["!dm:t"] },
     );
 
     const [dm, groupe] = conversations(session).sort((x, y) => x.roomId.localeCompare(y.roomId));
-    expect([dm!.direct, dm!.peerId]).toEqual([true, ADAM]);
+    expect([dm!.direct, dm!.peerId]).toEqual([true, ALICE]);
     expect([groupe!.direct, groupe!.peerId]).toEqual([false, undefined]);
   });
 
   it("un salon invité n'est pas dans la liste : il est dans les invitations", () => {
     const { session } = fakeClient([
       { roomId: "!joint:t", name: "joint" },
-      { roomId: "!invite:t", name: "adam", membership: "invite", inviter: ADAM },
+      { roomId: "!invite:t", name: "alice", membership: "invite", inviter: ALICE },
       { roomId: "!parti:t", name: "parti", membership: "leave" },
     ]);
 
     expect(conversations(session).map((c) => c.roomId)).toEqual(["!joint:t"]);
-    expect(invitations(session)).toEqual([{ roomId: "!invite:t", name: "adam", from: ADAM }]);
+    expect(invitations(session)).toEqual([{ roomId: "!invite:t", name: "alice", from: ALICE }]);
   });
 
   /**
@@ -190,21 +190,21 @@ describe("épingle par le tag natif m.favourite", () => {
 
 describe("un seul DM par correspondant", () => {
   it("réutilise le DM existant sans créer de salon", async () => {
-    const { session, client } = fakeClient([{ roomId: "!dm:t", name: "adam" }], {
-      [ADAM]: ["!dm:t"],
+    const { session, client } = fakeClient([{ roomId: "!dm:t", name: "alice" }], {
+      [ALICE]: ["!dm:t"],
     });
 
-    expect(await openDirectMessage(session, ADAM)).toBe("!dm:t");
+    expect(await openDirectMessage(session, ALICE)).toBe("!dm:t");
     expect(client.createRoom).not.toHaveBeenCalled();
   });
 
   it("un DM quitté ne compte pas : un nouveau est créé", async () => {
     const { session, client } = fakeClient(
-      [{ roomId: "!parti:t", name: "adam", membership: "leave" }],
-      { [ADAM]: ["!parti:t"] },
+      [{ roomId: "!parti:t", name: "alice", membership: "leave" }],
+      { [ALICE]: ["!parti:t"] },
     );
 
-    expect(await openDirectMessage(session, ADAM)).toBe("!neuf:tacita.test");
+    expect(await openDirectMessage(session, ALICE)).toBe("!neuf:tacita.test");
     expect(client.createRoom).toHaveBeenCalledTimes(1);
   });
 });
@@ -218,16 +218,16 @@ describe("un DM est inscrit dans m.direct, sinon il n'en est un pour personne", 
   it("créer un DM l'inscrit, et un second appel ne recrée rien", async () => {
     const { session, client } = fakeClient([]);
 
-    const premier = await openDirectMessage(session, ADAM);
-    expect(client.setAccountData).toHaveBeenCalledWith("m.direct", { [ADAM]: [premier] });
+    const premier = await openDirectMessage(session, ALICE);
+    expect(client.setAccountData).toHaveBeenCalledWith("m.direct", { [ALICE]: [premier] });
 
     // Le salon existe maintenant côté client : le second appel doit le retrouver.
-    const salon = { roomId: premier, name: "adam", tags: {}, getMyMembership: () => "join" };
+    const salon = { roomId: premier, name: "alice", tags: {}, getMyMembership: () => "join" };
     client.getRooms.mockReturnValue([salon] as never);
     client.getRoom.mockReturnValue(salon as never);
     client.createRoom.mockClear();
 
-    expect(await openDirectMessage(session, ADAM)).toBe(premier);
+    expect(await openDirectMessage(session, ALICE)).toBe(premier);
     // « Jamais un second » : sans `m.direct`, cette ligne échouait et un salon de plus
     // était créé à chaque ouverture de conversation.
     expect(client.createRoom).not.toHaveBeenCalled();
@@ -235,9 +235,9 @@ describe("un DM est inscrit dans m.direct, sinon il n'en est un pour personne", 
 
   it("n'écrase pas les autres correspondants déjà inscrits", async () => {
     const { session, client } = fakeClient([], { "@mira:tacita.test": ["!mira:t"] });
-    await openDirectMessage(session, ADAM);
+    await openDirectMessage(session, ALICE);
 
     const [, contenu] = client.setAccountData.mock.calls.at(-1)!;
-    expect(contenu).toEqual({ "@mira:tacita.test": ["!mira:t"], [ADAM]: ["!neuf:tacita.test"] });
+    expect(contenu).toEqual({ "@mira:tacita.test": ["!mira:t"], [ALICE]: ["!neuf:tacita.test"] });
   });
 });

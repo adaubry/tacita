@@ -175,8 +175,9 @@ Les valeurs qui **doivent** changer par rapport à l'exemple :
 | `SERVER_NAME`                                                                                                   | `chat.<domaine>`                                                                               |
 | `SHARD_ORIGIN` | **vide** — le shard est servi sur le même domaine, il n'y a pas d'origine à ouvrir |
 | `SYNAPSE_IP_RANGE_WHITELIST`                                                                                    | `["172.16.0.0/12"]` — obligatoire, voir ci-dessous                                             |
-| `POSTGRES_PASSWORD`, `SYNAPSE_*_SECRET*`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_OIDC_CLIENT_SECRET`, `S3_*_KEY*` | `openssl rand -hex 32` pour chacun, jamais deux fois la même                                   |
-| `MINIO_KMS_SECRET_KEY`                                                                                          | `echo "tacita-staging:$(openssl rand -base64 32)"`                                             |
+| `POSTGRES_PASSWORD`, `SYNAPSE_*_SECRET*`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_OIDC_CLIENT_SECRET`, `S3_SECRET_ACCESS_KEY` | `openssl rand -hex 32` pour chacun, jamais deux fois la même                         |
+| `S3_ACCESS_KEY_ID`                                                                                              | identifiant libre d'au moins 8 caractères, p.ex. `tacita-synapse`                             |
+| `GARAGE_RPC_SECRET`                                                                                             | `openssl rand -hex 32`                                                                         |
 | `VAPID_SUBJECT`                                                                                                 | `mailto:<ton-email>`                                                                           |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`                                                                        | voir ci-dessous                                                                                |
 | `LIVEKIT_KEY`, `LIVEKIT_SECRET`                                                                                 | `openssl rand -hex 32` pour le secret — le SFU ne fait confiance qu'aux jetons signés avec (§ 9) |
@@ -225,8 +226,8 @@ minutes, et c'est là que 4 Go de RAM se sentent.
 docker compose -f docker-compose.yml -f staging/docker-compose.yml ps
 ```
 
-Attendu : `postgres`, `keycloak`, `minio`, `synapse` en `healthy` ; `proxy`, `web`,
-`push-gateway`, `invite-tokens` en `Up` ; `minio-init` sorti en 0 (c'est un job).
+Attendu : `postgres`, `garage`, `synapse` en `healthy` ; `proxy`, `web`,
+`push-gateway`, `invite-tokens` en `Up`.
 
 Laisser Keycloak importer son realm — une quinzaine de secondes — avant de juger quoi que
 ce soit. Le `depends_on: healthy` du compose est là pour ça : Synapse met en cache l'échec
@@ -322,7 +323,7 @@ liens) sont construites localement, et sans le drapeau compose réutilise l'anci
 ### c. Vérifier — aucune de ces étapes ne se saute
 
 ```sh
-# 1. tous les services up/healthy, minio-init sorti en 0
+# 1. tous les services up/healthy
 docker compose -f docker-compose.yml -f staging/docker-compose.yml ps
 
 # 2. le proxy sert le shard, et l'API Matrix répond

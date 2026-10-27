@@ -8,7 +8,7 @@ vi.mock("matrix-js-sdk", async () => (await import("./mocks")).sdkModule());
 
 const config: SessionConfig = {
   homeserverUrl: "https://tacita.test",
-  identifiant: "adam",
+  identifiant: "alice",
   motDePasse: "motdepasse-essai",
   indexedDB: new IDBFactory(),
 };

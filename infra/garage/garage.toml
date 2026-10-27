@@ -1,0 +1,24 @@
+# Garage, stockage objet des médias — un nœud, une copie.
+#
+# Tout ce qui est secret ou qui dérive du .env arrive par l'environnement du conteneur
+# (docker-compose.yml : rpc_secret, clé S3, bucket). Ce fichier ne porte que la topologie.
+# Le service démarre avec `--single-node --default-bucket`, qui amorce layout, clé et
+# bucket au premier démarrage et ne refait rien aux suivants.
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+replication_factor = 1
+
+# `0.0.0.0` et non `[::]` : sans IPv6 dans l'espace réseau du conteneur, `[::]` fait
+# paniquer le processus (« Address family not supported by protocol »), vérifié sur v2.5.0.
+rpc_bind_addr = "0.0.0.0:3901"
+# Le nom du service sur le réseau du compose : c'est par lui que la CLI du healthcheck
+# joint le nœud. Sans cette ligne Garage devine l'adresse et le dit à chaque démarrage.
+rpc_public_addr = "garage:3901"
+
+[s3_api]
+api_bind_addr = "0.0.0.0:3900"
+# Garage vérifie la région portée par la signature de chaque requête. Cette valeur est
+# répétée mot pour mot dans `region_name` de synapse/homeserver.yaml.tmpl, et un test
+# l'exige : sans elle boto3 signe pour us-east-1, les uploads passent et chaque lecture
+# répond 400 — un bucket qui se remplit et ne rend rien.
+s3_region = "garage"

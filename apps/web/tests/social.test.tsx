@@ -43,7 +43,7 @@ vi.mock("@tacita/messaging", async (original) => ({
 }));
 
 const MIRA: Profile = { userId: "@mira:tacita.test", displayName: "mira" };
-const MOI: Profile = { userId: "@adam:tacita.test", displayName: "adam" };
+const MOI: Profile = { userId: "@alice:tacita.test", displayName: "alice" };
 
 /** Une base neuve par test : les notes persistent, et un test ne doit rien hériter. */
 let base: IDBFactory;
@@ -412,9 +412,9 @@ describe("son propre profil : nom, identifiant, et form edit", () => {
   it("le nom et l'identifiant sont tous deux affichés", () => {
     render(<ProfilMoi profil={MOI} onEnregistrer={vi.fn()} onPhoto={vi.fn()} />);
 
-    expect(screen.getByText("adam")).toBeTruthy();
+    expect(screen.getByText("alice")).toBeTruthy();
     // l'identifiant, sans son domaine : c'est le même pour tout le monde.
-    expect(screen.getByText("@adam")).toBeTruthy();
+    expect(screen.getByText("@alice")).toBeTruthy();
     // Pas de statut ami sur son propre profil : la question ne s'y pose pas.
     expect(screen.queryByText("Ami")).toBeNull();
   });
@@ -432,11 +432,11 @@ describe("son propre profil : nom, identifiant, et form edit", () => {
     expect(onEnregistrer).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Modifier le profil" }));
-    fireEvent.change(screen.getByLabelText("Nom d'affichage"), { target: { value: "adam a." } });
+    fireEvent.change(screen.getByLabelText("Nom d'affichage"), { target: { value: "alice a." } });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
     });
-    expect(onEnregistrer).toHaveBeenCalledWith({ displayName: "adam a." });
+    expect(onEnregistrer).toHaveBeenCalledWith({ displayName: "alice a." });
   });
 
   it("la déconnexion est posée à droite de la modification, dans la même rangée", () => {
@@ -527,11 +527,11 @@ describe("photo de profil : livrée, et honnête sur ce qu'elle expose", () => {
     expect(screen.getByText(/n'a pas pu être envoyée/)).toBeTruthy();
 
     // Et le reste du formulaire reste utilisable : une photo ratée ne bloque pas le nom.
-    fireEvent.change(screen.getByLabelText("Nom d'affichage"), { target: { value: "adam a." } });
+    fireEvent.change(screen.getByLabelText("Nom d'affichage"), { target: { value: "alice a." } });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
     });
-    expect(onEnregistrer).toHaveBeenCalledWith({ displayName: "adam a." });
+    expect(onEnregistrer).toHaveBeenCalledWith({ displayName: "alice a." });
   });
 });
 
@@ -570,7 +570,7 @@ describe("réception d'un lien : on frappe, un membre confirme", () => {
   });
 
   it("un lien de groupe fait frapper, puis affiche une attente honnête", async () => {
-    const liens = service(vi.fn(async () => ({ kind: "group" as const, issuer: "@luca:t", roomId: GROUPE })));
+    const liens = service(vi.fn(async () => ({ kind: "group" as const, issuer: "@bob:t", roomId: GROUPE })));
     render(<ReceptionLien token={TOKEN} liens={liens} session={session()} />);
 
     await waitFor(() => expect(frapper).toHaveBeenCalledWith(expect.anything(), GROUPE));
@@ -593,7 +593,7 @@ describe("réception d'un lien : on frappe, un membre confirme", () => {
   });
 
   it("déjà membre : on ouvre la conversation au lieu de frapper à nouveau", async () => {
-    const liens = service(vi.fn(async () => ({ kind: "group" as const, issuer: "@luca:t", roomId: GROUPE })));
+    const liens = service(vi.fn(async () => ({ kind: "group" as const, issuer: "@bob:t", roomId: GROUPE })));
     render(<ReceptionLien token={TOKEN} liens={liens} session={session("join")} />);
 
     // succès idempotent : rouvrir un lien déjà utilisé n'est pas une erreur.
@@ -602,7 +602,7 @@ describe("réception d'un lien : on frappe, un membre confirme", () => {
   });
 
   it("déjà en attente : on réaffiche l'attente sans frapper deux fois", async () => {
-    const liens = service(vi.fn(async () => ({ kind: "group" as const, issuer: "@luca:t", roomId: GROUPE })));
+    const liens = service(vi.fn(async () => ({ kind: "group" as const, issuer: "@bob:t", roomId: GROUPE })));
     render(<ReceptionLien token={TOKEN} liens={liens} session={session("knock")} />);
 
     expect(await screen.findByText("Demande envoyée")).toBeTruthy();
@@ -610,7 +610,7 @@ describe("réception d'un lien : on frappe, un membre confirme", () => {
   });
 
   it("un lien de groupe sans salon est inutilisable : on ne devine pas le salon manquant", async () => {
-    const liens = service(vi.fn(async () => ({ kind: "group" as const, issuer: "@luca:t" })));
+    const liens = service(vi.fn(async () => ({ kind: "group" as const, issuer: "@bob:t" })));
     render(<ReceptionLien token={TOKEN} liens={liens} session={session()} />);
 
     expect(await screen.findByText("Ce lien n'est plus valide")).toBeTruthy();
@@ -704,15 +704,15 @@ describe("l'identifiant s'affiche sans son domaine", () => {
   };
 
   /**
-   * Retour utilisateur : « l'id `@adam:chat.example.org` est beaucoup trop long, il
-   * faudrait `@adam` uniquement ». La fédération étant désactivée, le
+   * Retour utilisateur : « l'id `@alice:chat.example.org` est beaucoup trop long, il
+   * faudrait `@alice` uniquement ». La fédération étant désactivée, le
    * domaine est le même pour tout le monde : il occupe la place du nom sans rien
    * apprendre. Ce que les callbacks reçoivent, en revanche, reste l'adresse entière.
    */
-  it("la carte de profil montre `@adam`, pas l'adresse entière", () => {
+  it("la carte de profil montre `@alice`, pas l'adresse entière", () => {
     render(<ProfilMoi profil={MOI} onEnregistrer={vi.fn()} onPhoto={vi.fn()} />);
 
-    expect(screen.getByText("@adam")).toBeTruthy();
+    expect(screen.getByText("@alice")).toBeTruthy();
     expect(screen.queryByText(MOI.userId)).toBeNull();
   });
 

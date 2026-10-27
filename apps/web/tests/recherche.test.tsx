@@ -33,7 +33,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-const MOI = "@adam:tacita.test";
+const MOI = "@alice:tacita.test";
 const MIRA = "@mira:tacita.test";
 const LUNDI_10H = new Date("2026-08-03T10:00:00").getTime();
 
@@ -135,7 +135,7 @@ describe("la barre, et le périmètre dit en toutes lettres", () => {
 describe("recherches récentes : scroller, content peek, purge", () => {
   const profils = [
     { userId: MIRA, nom: "mira" },
-    { userId: "@luca:tacita.test", nom: "luca" },
+    { userId: "@bob:tacita.test", nom: "bob" },
     { userId: "@sam:tacita.test", nom: "sam" },
   ];
 
@@ -203,8 +203,8 @@ describe("recherches récentes : scroller, content peek, purge", () => {
   });
 
   it("empiler met le plus récent en tête, sans doublon, sous le plafond", () => {
-    expect(empiler([MIRA, "@luca:tacita.test"], MIRA)).toEqual([MIRA, "@luca:tacita.test"]);
-    expect(empiler(["@luca:tacita.test"], MIRA)).toEqual([MIRA, "@luca:tacita.test"]);
+    expect(empiler([MIRA, "@bob:tacita.test"], MIRA)).toEqual([MIRA, "@bob:tacita.test"]);
+    expect(empiler(["@bob:tacita.test"], MIRA)).toEqual([MIRA, "@bob:tacita.test"]);
 
     const beaucoup = Array.from({ length: MAX_RECENTS + 5 }, (_, rang) => `@u${rang}:tacita.test`);
     expect(empiler(beaucoup, MIRA)).toHaveLength(MAX_RECENTS);

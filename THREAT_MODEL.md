@@ -126,5 +126,5 @@ registration, and the directory all need to be reopened before anything else.
 
 ## Reporting a problem
 
-Please read [SECURITY.md](SECURITY.md). If you find something that contradicts this
-page, that is a bug in the software or a bug in this page, and both are worth an issue.
+If you find something that contradicts this page, that is a bug in the software or a
+bug in this page, and both are worth an issue.

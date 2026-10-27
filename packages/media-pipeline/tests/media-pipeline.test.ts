@@ -627,7 +627,9 @@ describe("l'unique chemin public du pipeline, et son site d'appel unique", () =>
     // avant d'avoir lu un seul fichier. Les barres sont normalisées pour que la racine se
     // retire des chemins collectés, qui sont construits en avant.
     const racine = fileURLToPath(new URL("../../../", import.meta.url)).replaceAll("\\", "/");
-    const ignores = new Set(["node_modules", ".next", ".git", "dist", "tsconfig.tsbuildinfo"]);
+    // `.claude` : l'app y crée les worktrees des sessions parallèles, copies entières du
+    // dépôt — sans l'exclure, chaque site d'appel se compte en double et l'égalité casse.
+    const ignores = new Set(["node_modules", ".next", ".git", ".claude", "dist", "tsconfig.tsbuildinfo"]);
     const appelants: string[] = [];
 
     const parcourir = (dossier: string) => {

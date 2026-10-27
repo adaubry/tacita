@@ -48,9 +48,9 @@ const HIER = new Date("2026-08-04T14:32:00").getTime();
 function conversation(partiel: Partial<Conversation> = {}): Conversation {
   return {
     roomId: "!salon:tacita.test",
-    name: "adam",
+    name: "alice",
     direct: true,
-    peerId: "@adam:tacita.test",
+    peerId: "@alice:tacita.test",
     preview: "on se voit demain ?",
     timestamp: AUJOURDHUI,
     unread: 0,
@@ -111,7 +111,7 @@ describe("la carte de conversation : avatar, nom, aperçu, date", () => {
       />,
     );
 
-    expect(screen.getAllByText("adam").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("alice").length).toBeGreaterThan(0);
     expect(screen.getByText("on se voit demain ?")).toBeTruthy();
     expect(screen.getByText(dateApercu(AUJOURDHUI, AUJOURDHUI))).toBeTruthy();
   });
@@ -133,7 +133,7 @@ describe("la carte de conversation : avatar, nom, aperçu, date", () => {
       <ConversationPreview conversation={conversation()} onOuvrir={onOuvrir} onEpingler={vi.fn()} />,
     );
 
-    fireEvent.click(carte("adam"));
+    fireEvent.click(carte("alice"));
     expect(onOuvrir).toHaveBeenCalledWith("!salon:tacita.test");
   });
 
@@ -145,7 +145,7 @@ describe("la carte de conversation : avatar, nom, aperçu, date", () => {
         onEpingler={vi.fn()}
       />,
     );
-    expect(carte("adam")).toBeTruthy();
+    expect(carte("alice")).toBeTruthy();
   });
 });
 
@@ -192,7 +192,7 @@ describe("épingler : glissement droit, et son équivalent non gestuel", () => {
       />,
     );
 
-    glisser(carte("adam"), SEUIL_GLISSEMENT);
+    glisser(carte("alice"), SEUIL_GLISSEMENT);
     expect(onEpingler).toHaveBeenCalledWith("!salon:tacita.test", true);
   });
 
@@ -206,8 +206,8 @@ describe("épingler : glissement droit, et son équivalent non gestuel", () => {
       />,
     );
 
-    glisser(carte("adam"), SEUIL_GLISSEMENT - 1);
-    glisser(carte("adam"), -SEUIL_GLISSEMENT);
+    glisser(carte("alice"), SEUIL_GLISSEMENT - 1);
+    glisser(carte("alice"), -SEUIL_GLISSEMENT);
     expect(onEpingler).not.toHaveBeenCalled();
   });
 
@@ -221,14 +221,14 @@ describe("épingler : glissement droit, et son équivalent non gestuel", () => {
     const onEpingler = vi.fn();
     render(
       <ConversationsList
-        conversations={[conversation({ name: "adam" })]}
+        conversations={[conversation({ name: "alice" })]}
         onOuvrir={vi.fn()}
         onEpingler={onEpingler}
       />,
     );
 
     // 64 px d'horizontal, mais 80 px de vertical : c'est un défilement.
-    glisser(carte("adam"), SEUIL_GLISSEMENT, 80);
+    glisser(carte("alice"), SEUIL_GLISSEMENT, 80);
     expect(onEpingler).not.toHaveBeenCalled();
   });
 
@@ -242,16 +242,16 @@ describe("épingler : glissement droit, et son équivalent non gestuel", () => {
       />,
     );
 
-    glisser(carte("adam"), SEUIL_GLISSEMENT);
+    glisser(carte("alice"), SEUIL_GLISSEMENT);
     expect(onEpingler).toHaveBeenCalledWith("!salon:tacita.test", false);
   });
 
   it("le glissement appelle le tag favourite du package, pas un store maison", async () => {
     listees.mockReturnValue([conversation()]);
     rendreAccueil();
-    await waitFor(() => expect(carte("adam")).toBeTruthy());
+    await waitFor(() => expect(carte("alice")).toBeTruthy());
 
-    glisser(carte("adam"), SEUIL_GLISSEMENT);
+    glisser(carte("alice"), SEUIL_GLISSEMENT);
     await waitFor(() =>
       expect(setFavourite).toHaveBeenCalledWith(expect.anything(), "!salon:tacita.test", true),
     );
@@ -299,7 +299,7 @@ describe("bannière de demandes : elle n'existe que s'il y en a", () => {
   });
 
   it("le glissement droit l'écarte, et elle revient à la demande suivante", async () => {
-    demandes.mockReturnValue([{ roomId: "!invite:t", name: "adam" }]);
+    demandes.mockReturnValue([{ roomId: "!invite:t", name: "alice" }]);
     rendreAccueil();
     await waitFor(() => expect(screen.getByText("Nouvelles demandes")).toBeTruthy());
 
@@ -355,15 +355,15 @@ describe("création : un DM sans doublon, ou un groupe", () => {
   it("choisir un contact ouvre le DM par le package, jamais par createRoom", async () => {
     listees.mockReturnValue([conversation()]);
     rendreAccueil();
-    await waitFor(() => expect(carte("adam")).toBeTruthy());
+    await waitFor(() => expect(carte("alice")).toBeTruthy());
 
     fireEvent.click(screen.getByLabelText("Nouvelle conversation ou groupe"));
     const feuille = within(screen.getByRole("dialog"));
     fireEvent.click(feuille.getByText("Nouvelle conversation"));
-    fireEvent.click(feuille.getByText("@adam:tacita.test"));
+    fireEvent.click(feuille.getByText("@alice:tacita.test"));
 
     await waitFor(() =>
-      expect(openDirectMessage).toHaveBeenCalledWith(expect.anything(), "@adam:tacita.test"),
+      expect(openDirectMessage).toHaveBeenCalledWith(expect.anything(), "@alice:tacita.test"),
     );
     expect(createGroupChat).not.toHaveBeenCalled();
     await waitFor(() => expect(pousser).toHaveBeenCalledWith(routeConversation("!dm:tacita.test")));
@@ -372,7 +372,7 @@ describe("création : un DM sans doublon, ou un groupe", () => {
   it("un groupe demande un nom et au moins un membre", async () => {
     listees.mockReturnValue([conversation()]);
     rendreAccueil();
-    await waitFor(() => expect(carte("adam")).toBeTruthy());
+    await waitFor(() => expect(carte("alice")).toBeTruthy());
 
     fireEvent.click(screen.getByLabelText("Nouvelle conversation ou groupe"));
     const feuille = within(screen.getByRole("dialog"));
@@ -385,12 +385,12 @@ describe("création : un DM sans doublon, ou un groupe", () => {
     expect(createGroupChat).not.toHaveBeenCalled();
 
     fireEvent.change(feuille.getByLabelText("Nom du groupe"), { target: { value: "équipe" } });
-    fireEvent.click(feuille.getByRole("checkbox", { name: "adam" }));
+    fireEvent.click(feuille.getByRole("checkbox", { name: "alice" }));
     fireEvent.click(feuille.getByRole("button", { name: /Créer le groupe/ }));
 
     await waitFor(() =>
       expect(createGroupChat).toHaveBeenCalledWith(expect.anything(), "équipe", [
-        "@adam:tacita.test",
+        "@alice:tacita.test",
       ]),
     );
   });

@@ -248,7 +248,7 @@ function AjouterMembre({
 }) {
   const [identifiant, setIdentifiant] = useState("");
   /*
-   * **le domaine ne se tape plus.** `@adam` est une adresse complète ici
+   * **le domaine ne se tape plus.** `@alice` est une adresse complète ici
    * (fédération désactivée) ; l'exiger en entier faisait recopier à la main
    * la partie que personne ne choisit. `identifiantComplet` rend la forme canonique, ou
    * `undefined` quand la saisie n'est pas un identifiant — c'est notre seule validation.

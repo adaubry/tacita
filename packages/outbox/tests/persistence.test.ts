@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createOutbox, type Outbox } from "../src";
+import { BASE_BACKOFF_MS, createOutbox, type Outbox } from "../src";
 import { fakeSession, matrixError } from "./session-mock";
 
 const ROOM = "!salon:tacita.test";
@@ -174,7 +174,12 @@ describe("la reprise d'un téléversement média appartient à la file", () => {
     );
 
     await file.flush();
-    await vi.waitFor(() => expect(ctx.client.sendEvent).toHaveBeenCalled());
+    // La reprise est tenue par le backoff : l'entrée n'est due qu'à BASE_BACKOFF_MS après
+    // l'échec, et le délai par défaut de `waitFor` vaut exactement cette durée — le test
+    // ne tenait qu'à quelques millisecondes, et tombait dès que la machine était chargée.
+    await vi.waitFor(() => expect(ctx.client.sendEvent).toHaveBeenCalled(), {
+      timeout: 3 * BASE_BACKOFF_MS,
+    });
     // Deux tailles téléversées en tout : 32 une seule fois, puis 8.
     expect(televerses).toEqual([32, 8]);
     file.dispose();

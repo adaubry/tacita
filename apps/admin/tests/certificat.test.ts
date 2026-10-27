@@ -10,7 +10,7 @@ import {
 
 const FAITS: Faits = {
   domaine: "chat.tacita.fr",
-  email: "adam@tacita.fr",
+  email: "alice@tacita.fr",
   dev: false,
   certbotPresent: true,
   nomsMuets: [],
@@ -100,7 +100,7 @@ describe("l'ordre des étapes, qui n'est pas indifférent", () => {
   });
 
   it("l'e-mail donné est celui transmis à Let's Encrypt", () => {
-    expect(avec().etapes.at(-1)?.args).toContain("adam@tacita.fr");
+    expect(avec().etapes.at(-1)?.args).toContain("alice@tacita.fr");
   });
 
   it("chaque étape porte son motif, pour que le plan s'explique lui-même", () => {

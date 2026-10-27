@@ -15,7 +15,7 @@ import {
 import type { MatrixReader } from "../src/matrix.ts";
 import { createMemoryStore } from "./memory-store.ts";
 
-const LUCA = "@luca:tacita.test";
+const BOB = "@bob:tacita.test";
 const MIRA = "@mira:tacita.test";
 const SALON = "!groupe:tacita.test";
 const MAINTENANT = 1_800_000_000_000;
@@ -32,7 +32,7 @@ function codeDuService(): string {
 }
 
 /** Deux comptes vivants, personne d'ignoré : le cas nominal, que chaque test dévie. */
-function fakeMatrix(jetons: Record<string, string> = { "jeton-luca": LUCA, "jeton-mira": MIRA }) {
+function fakeMatrix(jetons: Record<string, string> = { "jeton-bob": BOB, "jeton-mira": MIRA }) {
   return {
     whoami: vi.fn(async (token: string) => jetons[token]),
     // Signatures explicites : sans elles, `mock.calls` est un tuple vide et un test qui
@@ -52,7 +52,7 @@ beforeEach(() => {
   deps = { store, matrix, now: () => MAINTENANT };
 });
 
-const lienAmi = () => issue(deps, "jeton-luca", { kind: "friend" });
+const lienAmi = () => issue(deps, "jeton-bob", { kind: "friend" });
 
 /** L'échec de résolution, quelle qu'en soit la cause. */
 const échec = async (promesse: Promise<unknown>) => {
@@ -63,10 +63,10 @@ const échec = async (promesse: Promise<unknown>) => {
 
 describe("POST /links crée un lien, authentifié auprès de Synapse", () => {
   it("l'identité vient de whoami, jamais du corps de la requête", async () => {
-    const { id } = await issue(deps, "jeton-luca", { kind: "friend", issuer: MIRA } as never);
+    const { id } = await issue(deps, "jeton-bob", { kind: "friend", issuer: MIRA } as never);
 
-    expect(matrix.whoami).toHaveBeenCalledWith("jeton-luca");
-    expect(store.rows.get(id)!.issuer).toBe(LUCA);
+    expect(matrix.whoami).toHaveBeenCalledWith("jeton-bob");
+    expect(store.rows.get(id)!.issuer).toBe(BOB);
   });
 
   it("sans jeton valide, rien n'est créé", async () => {
@@ -83,7 +83,7 @@ describe("POST /links crée un lien, authentifié auprès de Synapse", () => {
   });
 
   it("un lien de groupe porte son salon, un lien d'ami n'en porte aucun", async () => {
-    const groupe = await issue(deps, "jeton-luca", { kind: "group", roomId: SALON });
+    const groupe = await issue(deps, "jeton-bob", { kind: "group", roomId: SALON });
     expect(store.rows.get(groupe.id)!.roomId).toBe(SALON);
 
     const ami = await lienAmi();
@@ -92,7 +92,7 @@ describe("POST /links crée un lien, authentifié auprès de Synapse", () => {
 
   it("refuse plutôt que de corriger en silence : kind, roomId, maxUses, ttl", async () => {
     const refus = async (request: Record<string, unknown>) =>
-      (await échec(issue(deps, "jeton-luca", request))).errcode;
+      (await échec(issue(deps, "jeton-bob", request))).errcode;
 
     expect(await refus({})).toBe("TACITA_BAD_KIND");
     expect(await refus({ kind: "ami" })).toBe("TACITA_BAD_KIND");
@@ -135,19 +135,19 @@ describe("token opaque, aléatoire, stocké haché", () => {
 
 describe("un lien ne révèle rien avant résolution authentifiée", () => {
   it("la réponse de création ne porte ni émetteur, ni salon, ni libellé", async () => {
-    const créé = await issue(deps, "jeton-luca", { kind: "group", roomId: SALON });
+    const créé = await issue(deps, "jeton-bob", { kind: "group", roomId: SALON });
 
     expect(Object.keys(créé).sort()).toEqual(["expiresAt", "id", "token"]);
     const sérialisé = JSON.stringify(créé);
-    expect(sérialisé).not.toContain(LUCA);
+    expect(sérialisé).not.toContain(BOB);
     expect(sérialisé).not.toContain(SALON);
   });
 
   it("le token lui-même n'encode rien : un lien qui fuite ne dit pas qui invite qui", async () => {
-    const { token } = await issue(deps, "jeton-luca", { kind: "group", roomId: SALON });
+    const { token } = await issue(deps, "jeton-bob", { kind: "group", roomId: SALON });
     const décodé = Buffer.from(token, "base64url").toString("latin1");
 
-    expect(décodé).not.toContain("luca");
+    expect(décodé).not.toContain("bob");
     expect(décodé).not.toContain("groupe");
     expect(décodé).not.toContain("tacita");
   });
@@ -158,14 +158,14 @@ describe("GET /links liste les liens de l'émetteur, jamais ceux d'un autre", ()
     await lienAmi();
     await issue(deps, "jeton-mira", { kind: "friend" });
 
-    expect(await list(deps, "jeton-luca")).toHaveLength(1);
+    expect(await list(deps, "jeton-bob")).toHaveLength(1);
     expect(await list(deps, "jeton-mira")).toHaveLength(1);
-    expect((await list(deps, "jeton-luca"))[0]!.id).not.toBe((await list(deps, "jeton-mira"))[0]!.id);
+    expect((await list(deps, "jeton-bob"))[0]!.id).not.toBe((await list(deps, "jeton-mira"))[0]!.id);
   });
 
   it("kind, salon, expiration et usages restants — et rien de plus", async () => {
-    await issue(deps, "jeton-luca", { kind: "group", roomId: SALON, maxUses: 3 });
-    const [lien] = await list(deps, "jeton-luca");
+    await issue(deps, "jeton-bob", { kind: "group", roomId: SALON, maxUses: 3 });
+    const [lien] = await list(deps, "jeton-bob");
 
     expect(Object.keys(lien!).sort()).toEqual(["expiresAt", "id", "kind", "roomId", "usesLeft"]);
     expect(lien).toMatchObject({ kind: "group", roomId: SALON, usesLeft: 3 });
@@ -179,10 +179,10 @@ describe("GET /links liste les liens de l'émetteur, jamais ceux d'un autre", ()
    * l'émetteur, on ne lui rend que ce qu'il a demandé lui-même.
    */
   it("le salon accompagne un lien de groupe, et rien n'accompagne un lien d'ami", async () => {
-    await issue(deps, "jeton-luca", { kind: "group", roomId: SALON });
+    await issue(deps, "jeton-bob", { kind: "group", roomId: SALON });
     await lienAmi();
 
-    const liens = await list(deps, "jeton-luca");
+    const liens = await list(deps, "jeton-bob");
     expect(liens.find((lien) => lien.kind === "group")!.roomId).toBe(SALON);
     // Absente, pas nulle : la même forme que la résolution, pour qu'un `=== roomId` côté
     // client ne puisse jamais être vrai par accident.
@@ -192,19 +192,19 @@ describe("GET /links liste les liens de l'émetteur, jamais ceux d'un autre", ()
 
   it("un lien révoqué ou expiré n'est plus actif", async () => {
     const { id } = await lienAmi();
-    await revoke(deps, "jeton-luca", id);
-    expect(await list(deps, "jeton-luca")).toEqual([]);
+    await revoke(deps, "jeton-bob", id);
+    expect(await list(deps, "jeton-bob")).toEqual([]);
 
-    await issue(deps, "jeton-luca", { kind: "friend", ttlSeconds: 60 });
+    await issue(deps, "jeton-bob", { kind: "friend", ttlSeconds: 60 });
     deps = { ...deps, now: () => MAINTENANT + 61_000 };
-    expect(await list(deps, "jeton-luca")).toEqual([]);
+    expect(await list(deps, "jeton-bob")).toEqual([]);
   });
 });
 
 describe("DELETE /links/:id révoque immédiatement", () => {
   it("le lien révoqué ne se résout plus", async () => {
     const { id, token } = await lienAmi();
-    await revoke(deps, "jeton-luca", id);
+    await revoke(deps, "jeton-bob", id);
 
     expect((await échec(resolve(deps, "jeton-mira", token))).status).toBe(404);
   });
@@ -216,7 +216,7 @@ describe("DELETE /links/:id révoque immédiatement", () => {
     expect((await échec(revoke(deps, "jeton-mira", "lien-inexistant"))).errcode).toBe(
       "TACITA_LINK_INVALID",
     );
-    // Et le lien de Luca est intact : le refus n'a rien touché.
+    // Et le lien de Bob est intact : le refus n'a rien touché.
     await expect(resolve(deps, "jeton-mira", token)).resolves.toBeDefined();
   });
 });
@@ -224,12 +224,12 @@ describe("DELETE /links/:id révoque immédiatement", () => {
 describe("la résolution rend un identifiant, et le service s'arrête là", () => {
   it("rend kind et issuer, plus roomId pour un lien de groupe", async () => {
     const ami = await lienAmi();
-    expect(await resolve(deps, "jeton-mira", ami.token)).toEqual({ kind: "friend", issuer: LUCA });
+    expect(await resolve(deps, "jeton-mira", ami.token)).toEqual({ kind: "friend", issuer: BOB });
 
-    const groupe = await issue(deps, "jeton-luca", { kind: "group", roomId: SALON });
+    const groupe = await issue(deps, "jeton-bob", { kind: "group", roomId: SALON });
     expect(await resolve(deps, "jeton-mira", groupe.token)).toEqual({
       kind: "group",
-      issuer: LUCA,
+      issuer: BOB,
       roomId: SALON,
     });
   });
@@ -252,7 +252,7 @@ describe("la résolution rend un identifiant, et le service s'arrête là", () =
 
 describe("la consommation est atomique", () => {
   it("deux résolutions concurrentes du dernier usage : une seule réussit", async () => {
-    const { token, id } = await issue(deps, "jeton-luca", { kind: "friend", maxUses: 1 });
+    const { token, id } = await issue(deps, "jeton-bob", { kind: "friend", maxUses: 1 });
     const autres = fakeMatrix({ "jeton-a": "@a:tacita.test", "jeton-b": "@b:tacita.test" });
     const concurrents: Deps = { ...deps, matrix: autres };
 
@@ -267,7 +267,7 @@ describe("la consommation est atomique", () => {
   });
 
   it("un lien multi-usages en sert exactement le nombre annoncé", async () => {
-    const { token, id } = await issue(deps, "jeton-luca", { kind: "friend", maxUses: 2 });
+    const { token, id } = await issue(deps, "jeton-bob", { kind: "friend", maxUses: 2 });
     const porteurs = fakeMatrix({ a: "@a:tacita.test", b: "@b:tacita.test", c: "@c:tacita.test" });
     const trois: Deps = { ...deps, matrix: porteurs };
 
@@ -285,10 +285,10 @@ describe("un seul message d'échec pour trois causes", () => {
     const inconnu = await échec(resolve(deps, "jeton-mira", "jamais-émis"));
 
     const { id, token: révoqué } = await lienAmi();
-    await revoke(deps, "jeton-luca", id);
+    await revoke(deps, "jeton-bob", id);
     const révocation = await échec(resolve(deps, "jeton-mira", révoqué));
 
-    const { token: périmé } = await issue(deps, "jeton-luca", { kind: "friend", ttlSeconds: 60 });
+    const { token: périmé } = await issue(deps, "jeton-bob", { kind: "friend", ttlSeconds: 60 });
     const plusTard: Deps = { ...deps, now: () => MAINTENANT + 61_000 };
     const expiration = await échec(resolve(plusTard, "jeton-mira", périmé));
 
@@ -343,7 +343,7 @@ describe("porteur déconnecté : le token n'est consommé qu'après authentifica
 
     // Après le détour par OIDC, le lien vaut toujours : il a survécu à la redirection
     // parce que rien n'a été consommé entre-temps.
-    await expect(resolve(deps, "jeton-mira", token)).resolves.toMatchObject({ issuer: LUCA });
+    await expect(resolve(deps, "jeton-mira", token)).resolves.toMatchObject({ issuer: BOB });
     expect(store.rows.get(id)!.usesLeft).toBe(0);
   });
 });
@@ -352,7 +352,7 @@ describe("le porteur est l'émetteur", () => {
   it("refus explicite, aucun DM avec soi-même, aucun usage consommé", async () => {
     const { token, id } = await lienAmi();
 
-    const erreur = await échec(resolve(deps, "jeton-luca", token));
+    const erreur = await échec(resolve(deps, "jeton-bob", token));
     expect(erreur.errcode).toBe("TACITA_OWN_LINK");
     expect(store.rows.get(id)!.usesLeft).toBe(1);
   });
@@ -360,7 +360,7 @@ describe("le porteur est l'émetteur", () => {
 
 describe("lien déjà résolu par ce porteur : succès idempotent", () => {
   it("la reprise rend le même résultat et ne consomme aucun usage de plus", async () => {
-    const { token, id } = await issue(deps, "jeton-luca", { kind: "group", roomId: SALON });
+    const { token, id } = await issue(deps, "jeton-bob", { kind: "group", roomId: SALON });
 
     const premier = await resolve(deps, "jeton-mira", token);
     expect(store.rows.get(id)!.usesLeft).toBe(0);
@@ -395,7 +395,7 @@ describe("l'un des deux a bloqué l'autre", () => {
     expect(erreur.status).toBe(404);
     // Rien ne distingue ce refus d'un lien inexistant, y compris le compteur d'usages.
     expect(store.rows.get(id)!.usesLeft).toBe(1);
-    expect(matrix.ignores).toHaveBeenCalledWith("jeton-mira", MIRA, LUCA);
+    expect(matrix.ignores).toHaveBeenCalledWith("jeton-mira", MIRA, BOB);
   });
 });
 
@@ -411,7 +411,7 @@ describe("émetteur disparu", () => {
     // Limite assumée : le lire supposerait l'état d'un
     // salon dont ni le service ni le porteur ne sont membres. Un lien de groupe reste
     // donc résolvable, et c'est le parcours d'invitation côté client qui échouera.
-    const { token } = await issue(deps, "jeton-luca", { kind: "group", roomId: SALON });
+    const { token } = await issue(deps, "jeton-bob", { kind: "group", roomId: SALON });
     await expect(resolve(deps, "jeton-mira", token)).resolves.toMatchObject({ roomId: SALON });
 
     // Le garde : personne n'ajoute discrètement une lecture d'état de salon — elle
@@ -420,7 +420,7 @@ describe("émetteur disparu", () => {
   });
 
   it("vérifié à chaque résolution, jamais mis en cache", async () => {
-    const { token, id } = await issue(deps, "jeton-luca", { kind: "friend", maxUses: 2 });
+    const { token, id } = await issue(deps, "jeton-bob", { kind: "friend", maxUses: 2 });
     const porteurs = fakeMatrix({ a: "@a:tacita.test", b: "@b:tacita.test" });
     const surveillé: Deps = { ...deps, matrix: porteurs };
 
@@ -435,7 +435,7 @@ describe("émetteur disparu", () => {
 
 describe("expiration vérifiée contre l'horloge du serveur", () => {
   it("une date fournie par le client est ignorée", async () => {
-    const { id } = await issue(deps, "jeton-luca", {
+    const { id } = await issue(deps, "jeton-bob", {
       kind: "friend",
       ttlSeconds: 60,
       expiresAt: MAINTENANT + 10 * 365 * 86_400_000,
@@ -445,14 +445,14 @@ describe("expiration vérifiée contre l'horloge du serveur", () => {
   });
 
   it("le plafond de sept jours est celui du serveur", async () => {
-    const { expiresAt } = await issue(deps, "jeton-luca", { kind: "friend", ttlSeconds: MAX_TTL_SECONDS });
+    const { expiresAt } = await issue(deps, "jeton-bob", { kind: "friend", ttlSeconds: MAX_TTL_SECONDS });
     expect(expiresAt).toBe(MAINTENANT + MAX_TTL_SECONDS * 1_000);
   });
 });
 
 describe("stockage minimal, lignes expirées purgées", () => {
   it("la ligne ne porte que ce que la spec autorise", async () => {
-    const { id } = await issue(deps, "jeton-luca", { kind: "group", roomId: SALON });
+    const { id } = await issue(deps, "jeton-bob", { kind: "group", roomId: SALON });
 
     expect(Object.keys(store.rows.get(id)!).sort()).toEqual([
       "expiresAt",
@@ -469,11 +469,11 @@ describe("stockage minimal, lignes expirées purgées", () => {
   it("un lien expiré ne survit pas à la purge, un lien épuisé mais valide si", async () => {
     const { token } = await lienAmi(); // un usage, un jour
     await resolve(deps, "jeton-mira", token);
-    await issue(deps, "jeton-luca", { kind: "friend", ttlSeconds: 60 });
+    await issue(deps, "jeton-bob", { kind: "friend", ttlSeconds: 60 });
 
     expect(await store.purge(MAINTENANT + 61_000)).toBe(1);
     // Celui qui reste est le lien épuisé : c'est lui qui porte l'idempotence de
     // l'effacer ferait échouer la reprise du porteur.
-    expect(await resolve(deps, "jeton-mira", token)).toMatchObject({ issuer: LUCA });
+    expect(await resolve(deps, "jeton-mira", token)).toMatchObject({ issuer: BOB });
   });
 });
