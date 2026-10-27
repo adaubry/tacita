@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { genererVapid, planifier, resteAFaire, valider } from "../src/init.ts";
-import { lireEnv } from "../src/verifications.ts";
+import { clesGarage, lireEnv } from "../src/verifications.ts";
+import { monde } from "./monde.ts";
 
 const REPONSES = { domaine: "chat.tacita.fr", email: "adam@tacita.fr" };
 
@@ -24,8 +25,8 @@ SYNAPSE_FORM_SECRET=change-me
 S3_BUCKET=synapse-media
 S3_ACCESS_KEY_ID=change-me
 S3_SECRET_ACCESS_KEY=change-me
-# format attendu : <key-id>:<base64 32 octets>
-MINIO_KMS_SECRET_KEY=change-me:change-me
+# 32 octets en hexadécimal ; génération : openssl rand -hex 32
+GARAGE_RPC_SECRET=change-me
 
 VAPID_SUBJECT=mailto:admin@example.org
 VAPID_PUBLIC_KEY=change-me
@@ -63,10 +64,10 @@ describe("la préparation d'infra/.env depuis l'exemple", () => {
     expect(contenu).not.toContain("change-me");
   });
 
-  it("produit un fichier que le doctor accepte, longueurs comprises", () => {
+  it("produit un fichier que le doctor accepte, longueurs comprises", async () => {
     expect(valeurs.get("VAPID_PUBLIC_KEY")).toHaveLength(87);
     expect(valeurs.get("VAPID_PRIVATE_KEY")).toHaveLength(43);
-    expect(Buffer.from(valeurs.get("MINIO_KMS_SECRET_KEY")!.split(":")[1]!, "base64")).toHaveLength(32);
+    expect((await clesGarage.verifier(monde({ env: valeurs }))).etat).toBe("ok");
     expect(valeurs.get("SERVER_NAME")).toBe("chat.tacita.fr");
     expect(valeurs.get("VAPID_SUBJECT")).toBe("mailto:adam@tacita.fr");
   });
@@ -75,8 +76,16 @@ describe("la préparation d'infra/.env depuis l'exemple", () => {
     // Les remplacer par une liste de clés échangerait une documentation vivante contre
     // un fichier que plus personne ne comprend six mois plus tard.
     expect(contenu).toContain("# Copie en .env, ne jamais committer .env (secrets réels)");
-    expect(contenu).toContain("# format attendu : <key-id>:<base64 32 octets>");
+    expect(contenu).toContain("# 32 octets en hexadécimal ; génération : openssl rand -hex 32");
     expect(contenu.indexOf("SERVER_NAME")).toBeLessThan(contenu.indexOf("POSTGRES_USER"));
+  });
+
+  it("pose un identifiant de clé S3 que Garage accepte, et un secret RPC au bon format", () => {
+    // Six caractères — « tacita » — suffisaient avant ; Garage en exige huit, et le dit
+    // seulement dans le journal d'un conteneur qui redémarre en boucle.
+    expect(valeurs.get("S3_ACCESS_KEY_ID")!.length).toBeGreaterThanOrEqual(8);
+    expect(valeurs.get("GARAGE_RPC_SECRET")).toMatch(/^[0-9a-f]{64}$/);
+    expect(actionDe("GARAGE_RPC_SECRET")).toBe("généré");
   });
 
   it("les appels n'ont plus une seule valeur que l'administrateur doive deviner", () => {
@@ -115,8 +124,9 @@ describe("la préparation d'infra/.env depuis l'exemple", () => {
 
 describe("la relance, qui ne doit rien casser de ce qui tourne déjà", () => {
   it("aucun secret déjà posé n'est régénéré", () => {
-    // Régénérer un macaroon invalide toutes les sessions ouvertes ; régénérer la clé
-    // KMS rend les médias déjà stockés illisibles. La relance doit être sans effet.
+    // Régénérer un macaroon invalide toutes les sessions ouvertes ; régénérer le secret
+    // S3 fait refuser à Garage de démarrer, la clé étant déjà associée à l'ancien. La
+    // relance doit être sans effet.
     const premier = planifier(EXEMPLE, REPONSES).contenu;
     const second = planifier(premier, REPONSES).contenu;
     expect(second).toBe(premier);

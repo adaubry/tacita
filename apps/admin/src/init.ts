@@ -52,7 +52,7 @@ const secretHexa = () => randomBytes(32).toString("hex");
  * fichier à moitié rempli livre du vide. Les deux se remplissent, tout le reste se garde.
  */
 const estAPourvoir = (valeur: string): boolean =>
-  valeur === "" || valeur === "change-me" || valeur === "change-me:change-me";
+  valeur === "" || valeur === "change-me";
 
 const SECRETS_GENERES = new Set([
   "POSTGRES_PASSWORD",
@@ -60,6 +60,7 @@ const SECRETS_GENERES = new Set([
   "SYNAPSE_MACAROON_SECRET_KEY",
   "SYNAPSE_FORM_SECRET",
   "S3_SECRET_ACCESS_KEY",
+  "GARAGE_RPC_SECRET",
   "LIVEKIT_SECRET",
 ]);
 
@@ -107,12 +108,11 @@ export function planifier(source: string, reponses: Reponses): Plan {
 
     if (cle === "VAPID_PUBLIC_KEY") return poser(vapid.publique, "généré", masquer(vapid.publique));
     if (cle === "VAPID_PRIVATE_KEY") return poser(vapid.privee, "généré", masquer(vapid.privee));
-    if (cle === "MINIO_KMS_SECRET_KEY")
-      return poser(`tacita:${randomBytes(32).toString("base64")}`, "généré", "tacita:… (32 octets)");
     if (cle === "POSTGRES_USER") return poser("synapse", "renseigné", "synapse");
     if (cle === "S3_BUCKET") return poser("synapse-media", "renseigné", "synapse-media");
-    if (cle === "S3_ACCESS_KEY_ID" || cle === "LIVEKIT_KEY")
-      return poser("tacita", "renseigné", "tacita");
+    // Garage refuse un identifiant de clé de moins de 8 caractères : « tacita » n'en a que six.
+    if (cle === "S3_ACCESS_KEY_ID") return poser("tacita-synapse", "renseigné", "tacita-synapse");
+    if (cle === "LIVEKIT_KEY") return poser("tacita", "renseigné", "tacita");
     if (SECRETS_GENERES.has(cle)) {
       const secret = secretHexa();
       return poser(secret, "généré", masquer(secret));
