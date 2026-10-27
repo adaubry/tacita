@@ -20,7 +20,7 @@ import { AppelObjet } from "./AppelObjet";
 import { DateSeparator } from "./DateSeparator";
 import { MessageObject } from "./MessageObject";
 import type { Media, Telecharger } from "../media/media";
-import { nouveauJour, shouldShowHeader, type MessageAffiche } from "./message";
+import { finDeGroupe, nouveauJour, shouldShowHeader, type MessageAffiche } from "./message";
 import { Skeleton } from "../foundation/Skeleton";
 
 interface TimelineProps {
@@ -305,6 +305,7 @@ export function Timeline({
             <MessageObject
               message={message}
               entete={shouldShowHeader(precedent, message)}
+              pied={finDeGroupe(message, messages[rang + 1])}
               heureVisible={heuresVisibles}
               reactions={reactions?.(message)}
               recu={message.cle === recu?.cle ? recu : undefined}

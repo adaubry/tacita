@@ -32,7 +32,7 @@ export function Suggestions({ profils, onOuvrirProfil }: SuggestionsProps) {
             onClick={() => onOuvrirProfil(profil.userId)}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-3)" }}>
-              <ConversationAvatar nom={profil.displayName} direct taille={40} />
+              <ConversationAvatar nom={profil.displayName} direct taille={40} cle={profil.userId} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Text type="body" weight="bold" maxLines={1}>
                   {profil.displayName}
@@ -81,7 +81,7 @@ export function DemandesList({ demandes, onAccepter, onRefuser }: DemandesListPr
             padding: "var(--spacing-2)",
           }}
         >
-          <ConversationAvatar nom={demande.nom} direct taille={40} />
+          <ConversationAvatar nom={demande.nom} direct taille={40} cle={demande.userId ?? demande.roomId} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <Text type="body" weight="bold" maxLines={1}>
               {demande.nom}
@@ -107,11 +107,15 @@ export function DemandesList({ demandes, onAccepter, onRefuser }: DemandesListPr
                * `secondary` : `danger` est réservé au destructif, et refuser une demande
                * n'efface aucune donnée de l'utilisateur.
                */
+              className="tacita-bouton-doux"
               onClick={() => onAccepter(demande)}
             />
+            {/* `ghost` et non `secondary` : deux cadres côte à côte font deux boîtes à
+                lire là où il n'y a qu'un choix. Le poids suffit à dire laquelle des deux
+                actions est la principale — et refuser n'efface rien, donc pas de `danger`. */}
             <Button
               label="Refuser"
-              variant="secondary"
+              variant="ghost"
               size="sm"
               onClick={() => onRefuser(demande)}
             />

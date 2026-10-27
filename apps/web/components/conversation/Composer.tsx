@@ -39,6 +39,18 @@ interface ComposerProps {
   actions?: ReactNode;
   /** la capture photo, entre le champ et l'envoi. Fournie par M-E. */
   actionsEnvoi?: ReactNode;
+  /**
+   * Le micro, rendu **à la place** du bouton d'envoi tant que le champ est vide.
+   *
+   * Pas à côté : la rangée porte déjà quatre contrôles, et un cinquième permanent se
+   * prendrait sur la largeur du champ — celle qui revient au texte, puisqu'on écrit dix
+   * fois plus souvent qu'on ne joint. Ce qu'il remplace est un bouton **désactivé**, donc
+   * une case morte : l'échange est gagnant des deux côtés.
+   *
+   * Absent quand l'appareil ne sait rien enregistrer : le bouton d'envoi grisé reprend
+   * alors sa place, et aucun micro inerte n'est affiché.
+   */
+  vocal?: ReactNode;
 }
 
 /**
@@ -65,9 +77,11 @@ interface ComposerProps {
  * une rangée flex et le prédicat `canSend` : quelques lignes, contre un composant dont la
  * forme est celle d'un autre produit.
  *
- * ponytail: pas de bouton vocal. Il dépend d'un enregistreur que M-E ne livre pas, et un
- * micro inerte serait une fonction affichée qui ne marche pas (interdit n°13). Sa place
- * est prête, entre la capture et l'envoi.
+ * **Le bouton vocal a pris sa place** : il remplace le bouton d'envoi tant
+ * que le champ est vide, et ne se rend pas du tout quand l'appareil ne sait rien
+ * enregistrer. La règle qui le retenait n'a pas bougé — un micro inerte serait une
+ * fonction affichée qui ne marche pas ; c'est l'enregistreur qui existe désormais, et
+ * c'est lui qui décide s'il s'affiche.
  */
 export function Composer({
   mentions,
@@ -78,6 +92,7 @@ export function Composer({
   ecrivent = [],
   actions,
   actionsEnvoi,
+  vocal,
 }: ComposerProps) {
   const [texte, setTexte] = useState(texteInitial);
   const source = useMemo(() => createStaticSource(mentions), [mentions]);
@@ -202,14 +217,18 @@ export function Composer({
             `canSend` du shell disparu avec lui, la règle est ici — et c'est la même que
             celle d'`envoyer` : un message blanc ne part pas. La tenir à deux endroits
             serait une divergence en attente ; elle tient en un `trim`. */}
-        <Button
-          label="Envoyer"
-          variant="primary"
-          isIconOnly
-          icon={IconeEnvoyer}
-          isDisabled={texte.trim() === ""}
-          onClick={() => envoyer(texte)}
-        />
+        {vocal && texte.trim() === "" ? (
+          vocal
+        ) : (
+          <Button
+            label="Envoyer"
+            variant="primary"
+            isIconOnly
+            icon={IconeEnvoyer}
+            isDisabled={texte.trim() === ""}
+            onClick={() => envoyer(texte)}
+          />
+        )}
       </div>
     </div>
   );

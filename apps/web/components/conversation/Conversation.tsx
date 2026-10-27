@@ -60,6 +60,8 @@ import { BandeauAppel } from "../appels/BandeauAppel";
 import { LayoutHeader } from "../foundation/LayoutHeader";
 import { IconeAppel, IconeCamera, IconeInfo, IconeVideo } from "../foundation/icons";
 import { Button } from "../foundation/primitives";
+import { cleTeinte, variablesTeinte } from "../foundation/teinte";
+import { EnregistreurVocal } from "../media/EnregistreurVocal";
 import { MediaPicker } from "../media/MediaPicker";
 import { MediaViewer } from "../media/MediaViewer";
 import { PhotoCapture } from "../media/PhotoCapture";
@@ -520,9 +522,21 @@ export function Conversation({ roomId }: { roomId: string }) {
 
           `100dvh` et non `100vh` : la barre d'URL rétractable des mobiles (même raison
           qu'en M-B, `RecoveryGate`). */}
-      <div style={{ display: "flex", flexDirection: "column", height: "100dvh" }}>
+      <div
+        /* La teinte du salon, posée **une fois, à la racine de l'écran**. Tout ce qui est
+           dessous — vos bulles, le filet de l'en-tête — la lit par héritage sans rien savoir
+           de sa dérivation. En DM c'est celle du correspondant, en groupe celle du salon. */
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          height: "100dvh",
+          ...variablesTeinte(salon ? cleTeinte(salon) : roomId),
+        }}
+      >
         <LayoutHeader
           titre={salon?.name ?? "Conversation"}
+          // Le filet de l'en-tête prend la teinte du salon : on est quelque part.
+          teinte
           fin={
             <div style={{ display: "flex", gap: "var(--spacing-1)" }}>
               {/* M-D fournit l'emplacement, M-I le comportement : les deux
@@ -572,6 +586,7 @@ export function Conversation({ roomId }: { roomId: string }) {
           starter={
             <ConversationStarter
               nom={salon?.name ?? ""}
+              cle={salon ? cleTeinte(salon) : roomId}
               sousTitre={
                 salon?.direct
                   ? // l'identifiant sans son domaine, identique pour tous.
@@ -633,6 +648,10 @@ export function Conversation({ roomId }: { roomId: string }) {
               onClick={() => setCapture(true)}
             />
           }
+          // Le fichier produit repart par `joindre`, le chemin de toute pièce jointe :
+          // compression, chiffrement et mise en file y sont déjà écrits, et un vocal n'a
+          // aucune raison d'avoir les siens.
+          vocal={<EnregistreurVocal onEnvoyer={(fichier) => void joindre([fichier])} />}
         />
       </div>
 

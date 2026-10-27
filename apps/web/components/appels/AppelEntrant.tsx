@@ -37,6 +37,8 @@ export interface AppelAffiche {
   roomId: string;
   nom: string;
   direct: boolean;
+  /** Le correspondant en DM, absent en groupe. Source de la teinte. */
+  peerId?: string;
   /** Distingue deux appels successifs dans le même salon : la clé du rejet local. */
   cle: string;
 }
@@ -64,6 +66,9 @@ export function appelAMontrer(
     // rien à personne. À défaut, l'auteur — qui est au moins un nom d'utilisateur.
     nom: salon?.name ?? candidat.from,
     direct: salon?.direct ?? true,
+    // Le correspondant en DM : c'est de lui que se dérive la teinte, pour que l'appel
+    // porte la même couleur que la conversation et la liste d'amis.
+    peerId: salon?.peerId,
     cle: `${candidat.roomId}:${candidat.since}`,
   };
 }
@@ -141,7 +146,7 @@ export function AppelEntrant() {
         boxShadow: "var(--shadow-high)",
       }}
     >
-      <ConversationAvatar nom={appel.nom} direct={appel.direct} taille={40} />
+      <ConversationAvatar nom={appel.nom} direct={appel.direct} taille={40} cle={appel.peerId ?? appel.roomId} />
 
       <div style={{ display: "grid", minWidth: 0, flex: 1 }}>
         <Text maxLines={1}>{appel.nom}</Text>
@@ -154,12 +159,13 @@ export function AppelEntrant() {
         {/* L'ordre compte : le geste destructeur n'est jamais le premier sous le pouce. */}
         <Button
           label="Ignorer"
-          variant="secondary"
+          variant="ghost"
           onClick={() => setRejetes((connus) => new Set(connus).add(appel.cle))}
         />
         <Button
           label="Répondre"
           variant="primary"
+          className="tacita-bouton-doux"
           onClick={() => router.push(routeAppel(appel.roomId))}
         />
       </div>

@@ -368,13 +368,43 @@ export function waveform(samples: Float32Array, buckets = WAVEFORM_BUCKETS): num
 }
 
 /**
- * l'aiguillage des trois chemins d'entrée vers l'unique format de sortie.
+ * **Les formats qu'on accepte d'envoyer sans les convertir**, quand rien d'autre n'est
+ * possible sur l'appareil.
+ *
+ * `audio/mp4` et `audio/aac` sont, du point de vue du *destinataire*, le choix le plus sûr
+ * qui soit : un `<audio>` les joue partout, davantage que l'Ogg/Opus, que Safari n'a su
+ * lire que tardivement. `decodeAudioData` les décode aussi, donc la durée et la forme
+ * d'onde se calculent comme pour les autres.
+ *
+ * La liste est **close**, et c'est le point : un conteneur exotique que l'appareil
+ * émetteur sait produire mais que personne ne sait lire doit échouer à l'envoi, pas
+ * arriver chez quelqu'un sous la forme d'un message qu'il ne pourra pas ouvrir.
+ */
+const REPLIS_LISIBLES = ["audio/mp4", "audio/aac", "audio/mpeg"] as const;
+
+const lisiblePartout = (type: string) =>
+  REPLIS_LISIBLES.some((connu) => type.startsWith(connu));
+
+/**
+ * l'aiguillage des chemins d'entrée vers le format de sortie **préféré**.
  *
  * L'ordre compte : le moins cher d'abord. Un vocal Firefox ne coûte rien, un vocal Chrome
- * coûte une recopie d'octets, et seul Safari paie un encodage — que `transcodeAudio` porte,
- * dans le `MediaEnvironment` injecté.
+ * coûte une recopie d'octets, et un vocal Safari paie un encodage — que `transcodeAudio`
+ * porte, dans le `MediaEnvironment` injecté.
+ *
+ * **Le dernier palier amende la règle « un seul format sort d'ici »** : elle
+ * devient « un seul format *préféré*, et un repli lisible partout ». WebKit n'a ajouté
+ * l'enregistrement WebM/Opus qu'en 18.4 ; sur un iOS resté en deçà, et sans encodeur
+ * disponible, la règle d'origine ne produisait pas un vocal dans le bon format — elle
+ * produisait **l'absence de vocal**. Un AAC un peu plus lourd vaut mieux qu'un message
+ * qu'on ne peut pas envoyer, et l'Opus reste préféré partout où il existe, parce qu'il est
+ * nettement meilleur aux débits de la voix.
+ *
+ * Le repli ne rattrape que les formats de `REPLIS_LISIBLES` : un échec de transcodage sur
+ * autre chose reste un échec, et remonte tel quel pour que l'UI dise laquelle des trois
+ * phrases.
  */
-async function versOggOpus(env: MediaEnvironment, file: File, type: string): Promise<Blob> {
+async function versFormatVocal(env: MediaEnvironment, file: File, type: string): Promise<Blob> {
   if (type.startsWith(VOICE_MIME_TYPE)) return file;
 
   if (type.startsWith(WEBM_OPUS_MIME)) {
@@ -382,7 +412,12 @@ async function versOggOpus(env: MediaEnvironment, file: File, type: string): Pro
     return new Blob([ogg as BlobPart], { type: VOICE_MIME_TYPE });
   }
 
-  return env.transcodeAudio(file);
+  try {
+    return await env.transcodeAudio(file);
+  } catch (cause) {
+    if (!lisiblePartout(type)) throw cause;
+    return file;
+  }
 }
 
 /**
@@ -466,17 +501,24 @@ async function construireContenu(
     }
 
     case "audio": {
-      // / D-03 — un seul format sort d'ici, quel que soit ce qui entre. Trois
-      // chemins, trois coûts : Firefox rend déjà de l'Ogg/Opus, Chrome rend le même
-      // flux Opus dans un conteneur WebM — un remuxage suffit, sans encodeur ni perte —,
-      // et Safari rend du MP4/AAC, seul cas qui demande un vrai encodage.
-      const ogg = await versOggOpus(env, file, type);
-      const { samples, durationMs } = await env.decodeAudio(ogg);
+      /*
+       * / D-03, amendé — **un format préféré, et un repli lisible
+       * partout**. Quatre paliers, du moins cher au plus coûteux : Firefox rend déjà de
+       * l'Ogg/Opus, Chrome et iOS 18.4+ rendent le même flux Opus dans un conteneur WebM
+       * — un remuxage suffit, sans encodeur ni perte —, un encodeur disponible convertit
+       * le MP4/AAC, et à défaut l'AAC part tel quel.
+       *
+       * Le `mimetype` se lit donc **sur le blob**, et n'est plus écrit d'avance : c'est la
+       * sortie qui dit ce qu'elle est. L'écrire en dur annoncerait de l'Ogg sur un fichier
+       * AAC, et le destinataire se fierait à l'étiquette plutôt qu'au contenu.
+       */
+      const audio = await versFormatVocal(env, file, type);
+      const { samples, durationMs } = await env.decodeAudio(audio);
       return {
         msgtype: "m.audio",
         body,
-        info: { mimetype: VOICE_MIME_TYPE, duration: durationMs, size: ogg.size },
-        file: await chiffrerEnAttente(env, ogg, ["file"], enAttente),
+        info: { mimetype: audio.type || VOICE_MIME_TYPE, duration: durationMs, size: audio.size },
+        file: await chiffrerEnAttente(env, audio, ["file"], enAttente),
         [CHAMP_BLOCS]: await blocsDe(env, enAttente),
         "org.matrix.msc1767.audio": { duration: durationMs, waveform: waveform(samples) },
         "org.matrix.msc3245.voice": {},

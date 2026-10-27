@@ -3,6 +3,7 @@
 import type { Conversation } from "@tacita/messaging";
 
 import { ConversationAvatar } from "../foundation/ConversationAvatar";
+import { cleTeinte } from "../foundation/teinte";
 import { IconeRecherche } from "../foundation/icons";
 import { Placeholder } from "../foundation/Placeholder";
 import { ClickableCard, Text } from "../foundation/primitives";
@@ -47,6 +48,7 @@ function ConversationTrouvee({
           mxc={conversation.avatarUrl}
           direct={conversation.direct}
           taille={36}
+          cle={cleTeinte(conversation)}
         />
         <div style={{ flex: 1, minWidth: 0 }}>
           <Text type="body" weight="bold" maxLines={1}>

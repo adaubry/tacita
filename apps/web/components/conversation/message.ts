@@ -140,3 +140,19 @@ export function shouldShowHeader(
   if (nouveauJour(precedent, message)) return true;
   return message.horodatage - precedent.horodatage > FENETRE_GROUPE_MS;
 }
+
+/**
+ * **Le symétrique de `shouldShowHeader` : ce message ferme-t-il son groupe ?**
+ *
+ * Il n'existait pas, et la timeline sans bulles n'en avait pas besoin — seul le *début*
+ * d'un groupe portait quelque chose (l'avatar, le nom). Une grappe de bulles a deux bouts :
+ * le dernier message porte l'heure et l'accusé de réception, et c'est lui qui ferme la
+ * forme. Même fenêtre, même règle, lue dans l'autre sens : le groupe s'arrête là où le
+ * suivant en ouvrirait un nouveau.
+ */
+export function finDeGroupe(
+  message: MessageAffiche,
+  suivant: MessageAffiche | undefined,
+): boolean {
+  return suivant === undefined || shouldShowHeader(message, suivant);
+}

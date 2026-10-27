@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { ButtonsList } from "../foundation/ButtonsList";
 import { ConversationAvatar } from "../foundation/ConversationAvatar";
+import { cleTeinte, variablesTeinte } from "../foundation/teinte";
 import { Sheet } from "../foundation/Sheet";
 import { Badge, ClickableCard, Text } from "../foundation/primitives";
 import { dateApercu } from "../../lib/dates";
@@ -42,7 +43,10 @@ function BadgeNonLus({ unread, mention }: { unread: number; mention: boolean }) 
       // Le `Badge` d'Astryx est la primitive ; seules ses deux couleurs sont reposées,
       // aucune variante ne donnant « encre sur accent-soft ».
       style={{
-        background: "var(--color-accent-muted)",
+        // Le voile du salon plutôt que l'accent : un compteur de non-lus dit *où* il y a
+        // du nouveau, et c'est précisément ce que la teinte porte. Le repli garde
+        // l'ancien fond partout où la variable n'est pas posée.
+        background: "var(--tacita-teinte-voile, var(--color-accent-muted))",
         color: "var(--color-text-primary)",
       }}
     />
@@ -93,11 +97,21 @@ export function ConversationPreview({
         onClick={() => onOuvrir(conversation.roomId)}
         {...geste}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-3)" }}>
+        {/* La teinte du salon, posée sur la ligne : l'avatar la dérive lui-même de la même
+            clé, le badge la lit ici par héritage. */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--spacing-3)",
+            ...variablesTeinte(cleTeinte(conversation)),
+          }}
+        >
           <ConversationAvatar
             nom={conversation.name}
             mxc={conversation.avatarUrl}
             direct={conversation.direct}
+            cle={cleTeinte(conversation)}
           />
 
           {/* `minWidth: 0` : sans lui, un aperçu long élargit la ligne au lieu d'être

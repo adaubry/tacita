@@ -83,6 +83,28 @@
      propre portée ; la valeur, elle, vit ici, avec les autres géométries. */
   --tacita-radius-avatar: 40%;
 
+  /*
+   * **La géométrie des bulles** (DESIGN.md § Components, amendement du 27/10/2026 — la
+   * timeline n'est plus « sans bulles »).
+   *
+   * Deux rayons et non un, parce qu'une bulle n'a pas quatre coins identiques : l'arête
+   * **côté auteur** est serrée, l'opposée est ronde, et le coin haut de la première bulle
+   * d'un groupe reste rond. C'est ce qui fait lire une grappe de messages comme une seule
+   * prise de parole au lieu de trois rectangles empilés — le regroupement des 5 minutes
+   * existait déjà, il ne se voyait que dans le blanc.
+   *
+   * 18 px et non `--radius-chat` (12) : ce dernier est le rayon du champ d'écriture, un
+   * contrôle. Une bulle est un objet de contenu, et à 12 px elle lit comme une carte.
+   * 6 px pour l'arête serrée — assez pour que le coin ne soit pas vif, trop peu pour
+   * qu'on l'y confonde avec un coin rond.
+   *
+   * Ici et pas dans le composant : c'est une géométrie du système, au même titre que le
+   * rayon d'avatar juste au-dessus, et le composer qui voudrait s'y accorder un jour
+   * recopierait les valeurs.
+   */
+  --tacita-radius-bulle: 18px;
+  --tacita-radius-bulle-serre: 6px;
+
   /* **Le dégagement de la bannière d'appel entrant** (30/08/2026, revue de conception
      R-07). Elle est `position: fixed` en haut de la fenêtre — hors du flux, parce que
      l'écran Conversation est une colonne de hauteur fixée et qu'un bandeau inséré
@@ -181,6 +203,36 @@
   .tacita-retour:not(#\#):not(#\#):not(#\#):not(#\#) {
     transition: none;
   }
+}
+
+/*
+ * **L'action primaire d'une paire : une teinte, pas un pavé** (27/10/2026, revue de la
+ * nouvelle direction — « je n'aime pas la forme et la couleur des boutons accepter /
+ * refuser / ignorer / répondre »).
+ *
+ * Le défaut d'Astryx pour `primary` est l'accent **plein**. DESIGN.md § Colors écrit que
+ * l'accent doit occuper moins de 5 % d'un écran courant et qu'« s'il devient ambiant,
+ * c'est un bug de design » : or une liste de demandes pose un aplat vert **par carte**. La
+ * règle était déjà enfreinte avant les bulles ; celles-ci l'ont seulement rendue visible.
+ *
+ * L'accent passe donc au voile, et l'encre verte dessus porte le sens. Mesuré : 6,8:1 en
+ * clair et 5,5:1 en sombre, au-dessus du seuil AA que DESIGN.md exige de chaque paire.
+ * Son voisin destructif-neutre passe en `ghost` dans les composants — deux poids, une
+ * seule famille.
+ *
+ * `background-image` n'est **pas** annulé ici, contrairement à `.tacita-retour` plus haut :
+ * les voiles de survol et d'appui d'Astryx passent par cette propriété, et ici ils vont
+ * dans le bon sens — sous le doigt, le bouton se fonce. C'est exactement l'état pressé
+ * qu'il faudrait écrire à la main sans eux.
+ *
+ * Les quatre `:not(#\#)` sont l'idiome de StyleX, comme pour `.tacita-retour` : la
+ * distribution place ses règles à trois, quatre passent devant sans `!important`.
+ */
+.tacita-bouton-doux:not(#\#):not(#\#):not(#\#):not(#\#) {
+  background-color: var(--color-accent-muted);
+  color: var(--color-accent);
+  border-color: transparent;
+  border-radius: var(--radius-container);
 }
 
 /*

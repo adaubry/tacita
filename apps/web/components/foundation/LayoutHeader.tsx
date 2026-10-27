@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { IconeRetour } from "./icons";
 import { Button, Text, Toolbar } from "./primitives";
@@ -12,6 +12,12 @@ interface LayoutHeaderProps {
   fin?: ReactNode;
   /** Certains layouts (les onglets) n'ont pas de retour. */
   retour?: boolean;
+  /**
+   * Le filet du bas prend la teinte posée par l'écran. Réservé aux layouts qui *sont*
+   * quelque part — une conversation, un profil — et jamais aux écrans d'app (réglages,
+   * demandes), qui n'appartiennent à personne et gardent le neutre.
+   */
+  teinte?: boolean;
 }
 
 /**
@@ -21,13 +27,28 @@ interface LayoutHeaderProps {
  * même conversation s'ouvre depuis l'accueil, une recherche ou une mention, et un
  * `href` figé renverrait les deux tiers des visiteurs au mauvais endroit.
  */
-export function LayoutHeader({ titre, fin, retour = true }: LayoutHeaderProps) {
+export function LayoutHeader({ titre, fin, retour = true, teinte = false }: LayoutHeaderProps) {
   const router = useRouter();
 
   return (
     <Toolbar
       label={titre}
       dividers={["bottom"]}
+      /*
+       * **Un filet teinté, pas un bandeau de 2 px.** Le `Toolbar` tire son séparateur de
+       * `--color-border` ; le redéfinir dans cette portée teinte le filet sans toucher à
+       * la couleur du reste de l'app, et sans recoder la primitive. C'est le seul trait
+       * de cet en-tête, donc le seul que la redéfinition atteigne.
+       *
+       * Un hairline plutôt que le trait épais des maquettes : DESIGN.md pose que la
+       * profondeur s'exprime d'abord par le filet, et un filet de 1 px qui change de
+       * couleur dit « vous êtes ici » sans crier.
+       */
+      style={
+        teinte
+          ? ({ "--color-border": "var(--tacita-teinte-encre)" } as CSSProperties)
+          : undefined
+      }
       startContent={
         retour ? (
           <Button

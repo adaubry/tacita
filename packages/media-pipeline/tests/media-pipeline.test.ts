@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -421,6 +422,59 @@ describe("transcodage vers Ogg/Opus quand l'entrée n'en est pas", () => {
   });
 });
 
+/**
+ * **Le quatrième palier**. WebKit n'a ajouté l'enregistrement WebM/Opus
+ * qu'en 18.4 : sur un iOS resté en deçà, et sans encodeur, la règle « un seul format sort
+ * d'ici » ne produisait pas un vocal au bon format — elle ne produisait aucun vocal.
+ *
+ * Ces trois tests tiennent l'amendement **et sa borne** : le repli n'est pas « envoyer
+ * n'importe quoi », c'est « envoyer ce que tout le monde sait lire ».
+ */
+describe("repli : un AAC part tel quel plutôt que de ne pas partir", () => {
+  const sansEncodeur = () =>
+    fakeEnv({
+      transcodeAudio: vi.fn(async () => {
+        throw new Error("transcodage audio indisponible");
+      }),
+    });
+
+  it("envoie le MP4/AAC sans conversion, en annonçant son vrai type", async () => {
+    const env = sansEncodeur();
+    const aac = new File([bytes("mp4 aac")], "vocal.m4a", { type: "audio/mp4" });
+    const content = await uploadAttachment(session, env, aac);
+
+    expect(env.transcodeAudio).toHaveBeenCalledTimes(1);
+    expect(content.msgtype).toBe("m.audio");
+    // L'étiquette dit ce que le fichier est, jamais ce qu'on aurait voulu qu'il soit.
+    expect(content.info.mimetype).toBe("audio/mp4");
+    expect(content.info.size).toBe(aac.size);
+  });
+
+  it("reste un vocal complet : durée, forme d'onde et marqueur MSC3245", async () => {
+    const content = await uploadAttachment(
+      session,
+      sansEncodeur(),
+      new File([bytes("mp4 aac")], "vocal.m4a", { type: "audio/mp4" }),
+    );
+
+    expect(content.info.duration).toBe(3000);
+    expect(content["org.matrix.msc1767.audio"]!.waveform).toHaveLength(60);
+    expect(content["org.matrix.msc3245.voice"]).toBeDefined();
+  });
+
+  it("refuse toujours un conteneur que personne ne saura lire", async () => {
+    // La liste des replis est close : un format exotique échoue à l'envoi plutôt que
+    // d'arriver chez quelqu'un sous la forme d'un message qu'il ne peut pas ouvrir.
+    await expect(
+      uploadAttachment(
+        session,
+        sansEncodeur(),
+        new File([bytes("flac")], "vocal.flac", { type: "audio/flac" }),
+      ),
+    ).rejects.toThrow("transcodage audio indisponible");
+  });
+});
+
 describe("vérification du hash puis déchiffrement local", () => {
   it("rend les octets d'origine sur un aller-retour complet", async () => {
     const clear = bytes("les octets exacts, au bit près");
@@ -568,7 +622,11 @@ describe("l'unique chemin public du pipeline, et son site d'appel unique", () =>
     //
     // Deux, et l'assertion reste une **égalité** : ce qui compte
     // n'est pas le nombre mais la liste, chaque entrée ayant été relue une fois.
-    const racine = new URL("../../../", import.meta.url).pathname;
+    // `fileURLToPath` et non `.pathname` : sous Windows ce dernier rend `/C:/…`, que Node
+    // résout ensuite depuis la racine du lecteur courant — `C:\C:\…`, et le parcours échoue
+    // avant d'avoir lu un seul fichier. Les barres sont normalisées pour que la racine se
+    // retire des chemins collectés, qui sont construits en avant.
+    const racine = fileURLToPath(new URL("../../../", import.meta.url)).replaceAll("\\", "/");
     const ignores = new Set(["node_modules", ".next", ".git", "dist", "tsconfig.tsbuildinfo"]);
     const appelants: string[] = [];
 
