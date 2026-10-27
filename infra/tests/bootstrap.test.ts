@@ -2,9 +2,13 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const DEPOT = new URL("../../", import.meta.url).pathname;
+// `fileURLToPath` et non `.pathname` : sous Windows ce dernier rend « /C:/… », que Node
+// résout depuis la racine du lecteur courant — d'où « C:\C:\…\install.sh » introuvable, et
+// un fichier de tests entier qui ne se charge même pas.
+const DEPOT = fileURLToPath(new URL("../../", import.meta.url));
 const bootstrap = readFileSync(join(DEPOT, "install.sh"), "utf-8");
 const machine = readFileSync(join(DEPOT, "apps/admin/src/machine.ts"), "utf-8");
 
