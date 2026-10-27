@@ -7,7 +7,7 @@ import { diagnostiquer, type Contexte } from "../src/contrat.ts";
 import {
   certificat,
   CHEMIN_CERT,
-  cleKmsMinio,
+  clesGarage,
   clesVapid,
   fichierEnv,
   lireEnv,
@@ -28,13 +28,13 @@ const ENV_SAIN: Record<string, string> = {
   SYNAPSE_REGISTRATION_SHARED_SECRET: "5d0e4b",
   SYNAPSE_MACAROON_SECRET_KEY: "9a1c7e",
   SYNAPSE_FORM_SECRET: "3f8b2d",
-  S3_ACCESS_KEY_ID: "tacita",
-  S3_SECRET_ACCESS_KEY: "c4e9a2",
+  S3_ACCESS_KEY_ID: "tacita-synapse",
+  S3_SECRET_ACCESS_KEY: "c4e9a2".repeat(3),
   VAPID_SUBJECT: "mailto:admin@tacita.fr",
   VAPID_PUBLIC_KEY: "P".repeat(87),
   VAPID_PRIVATE_KEY: "p".repeat(43),
   SYNAPSE_IP_RANGE_WHITELIST: '["172.16.0.0/12"]',
-  MINIO_KMS_SECRET_KEY: `tacita:${Buffer.alloc(32, 7).toString("base64")}`,
+  GARAGE_RPC_SECRET: "0123456789abcdef".repeat(4),
   LIVEKIT_KEY: "tacita",
   LIVEKIT_SECRET: "e1b8a4",
 };
@@ -58,9 +58,7 @@ describe("lecture du fichier d'environnement", () => {
     // Le cas réel : une clé base64 se termine souvent par « = ». Couper au premier
     // séparateur tronquerait le secret, et le symptôme serait un service qui refuse
     // de démarrer sans dire que sa clé a été rognée.
-    expect(lireEnv("MINIO_KMS_SECRET_KEY=tacita:AAAA==").get("MINIO_KMS_SECRET_KEY")).toBe(
-      "tacita:AAAA==",
-    );
+    expect(lireEnv("UNE_CLE_BASE64=AAAA==").get("UNE_CLE_BASE64")).toBe("AAAA==");
   });
 });
 
@@ -165,14 +163,20 @@ describe("le nom du serveur, qui ne se change plus après le premier démarrage"
   });
 });
 
-describe("la clé de chiffrement du stockage objet", () => {
+describe("les formats que Garage refuse au démarrage", () => {
   it.each([
-    ["change-me:change-me", "casse"],
-    ["tacita:trop-court", "casse"],
-    ["tacita", "casse"],
-    [`tacita:${Buffer.alloc(32).toString("base64")}`, "ok"],
-  ])("« %s » est %s", async (valeur, attendu) => {
-    expect((await cleKmsMinio.verifier(avec({ MINIO_KMS_SECRET_KEY: valeur }))).etat).toBe(attendu);
+    [{ GARAGE_RPC_SECRET: "change-me" }, "casse", "GARAGE_RPC_SECRET"],
+    [{ GARAGE_RPC_SECRET: "0".repeat(63) }, "casse", "GARAGE_RPC_SECRET"],
+    [{ S3_ACCESS_KEY_ID: "tacita" }, "casse", "S3_ACCESS_KEY_ID"],
+    [{ S3_SECRET_ACCESS_KEY: "court" }, "casse", "S3_SECRET_ACCESS_KEY"],
+    [{}, "ok", "conformes"],
+  ])("%o est %s", async (paires, attendu, nomme) => {
+    // Chacun fait sortir Garage en nommant la cause, mais dans le journal d'un conteneur
+    // qui repart en boucle : `docker compose ps` montre une pile qui semble démarrer, et
+    // Synapse, qui l'attend en `service_healthy`, ne part jamais.
+    const constat = await clesGarage.verifier(avec(paires));
+    expect(constat.etat).toBe(attendu);
+    expect(constat.constat).toContain(nomme);
   });
 });
 

@@ -58,6 +58,7 @@ export const SECRETS_REQUIS = [
   "SYNAPSE_FORM_SECRET",
   "S3_ACCESS_KEY_ID",
   "S3_SECRET_ACCESS_KEY",
+  "GARAGE_RPC_SECRET",
   // Les appels font partie de la pile : le SFU ne fait confiance
   // qu'aux jetons que `lk-jwt-service` signe avec cette paire. Laissée sur `change-me`,
   // les deux la partagent quand même et rien n'échoue au démarrage — le premier appel
@@ -186,24 +187,30 @@ export const plagesAutorisees: Verification = {
   }),
 };
 
-/** MinIO exige `<id de clé>:<32 octets en base64>` et refuse de démarrer autrement. */
-export const cleKmsMinio: Verification = {
-  nom: "MINIO_KMS_SECRET_KEY",
+/**
+ * Les trois formats que Garage refuse au démarrage, relevés sur v2.5.0 : `rpc_secret`
+ * doit faire 32 octets en hexadécimal, l'identifiant de clé S3 au moins 8 caractères, son
+ * secret au moins 16. Chacun fait sortir le processus en nommant la cause — mais le
+ * conteneur repart en boucle, Synapse qui l'attend en `service_healthy` ne démarre jamais,
+ * et `docker compose ps` montre une pile qui semble se lancer.
+ */
+export const clesGarage: Verification = {
+  nom: "clés Garage",
   phase: "Configuration",
-  verifier: dependDeEnv("MINIO_KMS_SECRET_KEY", (env) => {
-    const [identifiant, secret] = (env.get("MINIO_KMS_SECRET_KEY") ?? "").split(":");
-    const valide =
-      identifiant !== undefined &&
-      identifiant !== "" &&
-      identifiant !== "change-me" &&
-      secret !== undefined &&
-      Buffer.from(secret, "base64").length === 32;
-    return valide
-      ? ok("MINIO_KMS_SECRET_KEY", "format et longueur conformes")
+  verifier: dependDeEnv("clés Garage", (env) => {
+    const fautes = [
+      !/^[0-9a-f]{64}$/i.test(env.get("GARAGE_RPC_SECRET") ?? "") &&
+        "GARAGE_RPC_SECRET : attendu 32 octets en hexadécimal",
+      (env.get("S3_ACCESS_KEY_ID") ?? "").length < 8 && "S3_ACCESS_KEY_ID : au moins 8 caractères",
+      (env.get("S3_SECRET_ACCESS_KEY") ?? "").length < 16 &&
+        "S3_SECRET_ACCESS_KEY : au moins 16 caractères",
+    ].filter((faute): faute is string => typeof faute === "string");
+    return fautes.length === 0
+      ? ok("clés Garage", "formats conformes")
       : casse(
-          "MINIO_KMS_SECRET_KEY",
-          "attendu « <id>:<32 octets en base64> » — MinIO refusera de démarrer",
-          "pnpm admin init la génère",
+          "clés Garage",
+          `${fautes.join(" ; ")} — Garage refusera de démarrer`,
+          "pnpm admin init les génère sur un .env neuf ; sur un .env déjà posé, ajouter GARAGE_RPC_SECRET=$(openssl rand -hex 32) à la main, et raccourci, S3_ACCESS_KEY_ID se change de même",
         );
   }),
 };
@@ -286,6 +293,6 @@ export const VERIFICATIONS_CONFIG: readonly Verification[] = [
   clesVapid,
   sujetVapid,
   plagesAutorisees,
-  cleKmsMinio,
+  clesGarage,
   certificat,
 ];

@@ -36,7 +36,7 @@ deployed as one unit on a machine you control:
 | --- | --- |
 | **Synapse** | Matrix homeserver, encrypted rooms |
 | **PostgreSQL** | its database |
-| **MinIO** | S3-compatible storage for encrypted media blobs |
+| **Garage** | S3 object storage for encrypted media blobs |
 | **LiveKit + Element Call** | voice and video calls, in a widget |
 | **nginx** | TLS termination, Let's Encrypt certificates |
 | **Push gateway** | Web Push (VAPID) relay — Sygnal only speaks APNs and FCM |

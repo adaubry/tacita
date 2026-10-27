@@ -28,7 +28,7 @@ const PILE_SAINE = [
   conteneur("synapse", { Health: "" }),
   conteneur("push-gateway", { Health: "" }),
   conteneur("proxy", { Health: "", Publishers: [{ PublishedPort: 443 }] }),
-  conteneur("minio-init", { State: "exited", Health: "", ExitCode: 0 }),
+  conteneur("garage"),
 ];
 
 const MAINTENANT = new Date("2026-08-25T22:00:00Z");
@@ -108,10 +108,17 @@ describe("la pile non démarrée n'est pas une panne", () => {
 });
 
 describe("l'état des services", () => {
-  it("une pile saine passe, le job d'initialisation sorti n'étant pas un défaut", async () => {
-    // `minio-init` fait son travail puis sort en 0 : c'est son état normal, et le
-    // compter comme une panne rendrait le diagnostic rouge sur une pile parfaite.
+  it("une pile saine passe", async () => {
     expect((await servicesEnBonneSante.verifier(avecPile(PILE_SAINE))).etat).toBe("ok");
+  });
+
+  it("un conteneur sorti est une panne, même en 0 — plus aucun job n'a le droit de sortir", async () => {
+    // L'exception existait pour le job d'init du stockage objet. Garage s'amorce tout seul :
+    // la tolérance est partie avec lui, et sans ce test elle reviendrait sans se voir.
+    const sorti = [...PILE_SAINE, conteneur("quelconque", { State: "exited", Health: "", ExitCode: 0 })];
+    const constat = await servicesEnBonneSante.verifier(avecPile(sorti));
+    expect(constat.etat).toBe("casse");
+    expect(constat.constat).toContain("quelconque (exited)");
   });
 
   it("un service arrêté bloque et est nommé", async () => {

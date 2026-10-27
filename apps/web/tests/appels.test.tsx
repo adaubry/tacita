@@ -111,7 +111,7 @@ beforeEach(() => {
   restoreSession.mockResolvedValue(
     asSession({
       client: {
-        getUserId: () => "@luca:t",
+        getUserId: () => "@bob:t",
         getDeviceId: () => "D1",
         baseUrl: "https://chat.tacita.test",
         // L'écran d'appel nomme qui il appelle, et le bandeau nomme qui participe : les

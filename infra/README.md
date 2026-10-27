@@ -1,6 +1,6 @@
 # infra — socle serveur
 
-Config-as-code : PostgreSQL, Synapse, Keycloak (OIDC + WebAuthn), MinIO (S3),
+Config-as-code : PostgreSQL, Synapse, Keycloak (OIDC + WebAuthn), Garage (S3),
 reverse proxy nginx, et le **raccordement** de deux services livrés ailleurs — la
 passerelle Web Push et le service de liens d'invitation.
 Hors scope : LiveKit/TURN/well-known, le *code* de la passerelle push et celui du
@@ -84,17 +84,20 @@ ignorés par git : chaque environnement garde le sien, le dépôt ne porte que l
 | PostgreSQL | 16 | `sha256:33f923b0…` |
 | Keycloak | 26.7.0 | `sha256:0f198be2…` |
 | nginx | 1.27-alpine | `sha256:65645c7b…` |
-| MinIO | RELEASE.2025-09-07 | `sha256:14cea493…` |
+| Garage | v2.5.0 (2026-10-24) | `sha256:677e5b75…` |
 | push-gateway (base Node) | 22-alpine (2026-08-03) | `sha256:c610fcdf…` |
 
 Digests complets dans `docker-compose.yml`, résolus via `docker buildx imagetools
 inspect` au moment de l'écriture (2026-08-02) — à revérifier avant tout bump de
 version.
 
-**MinIO** : dernière image publiée en septembre 2025, le dépôt upstream a été
-archivé début 2026 (plus de mises à jour de sécurité). Convient pour le dev
-local ; en production, pointer `s3_storage_provider` vers un vrai bucket
-S3-compatible maintenu (OVH, Scaleway, AWS) via les mêmes variables d'env.
+**Garage** : un nœud, une copie (`replication_factor = 1`, `infra/garage/garage.toml`).
+Le service s'amorce seul depuis `.env` (`--single-node --default-bucket`) : pas de job
+d'init, pas de console. Les médias vivent dans le volume `garage-data` ; l'identifiant
+de clé fait au moins 8 caractères et `GARAGE_RPC_SECRET` 32 octets hex, sans quoi le
+conteneur refuse de démarrer — `pnpm admin doctor` le dit avant. En production, un
+bucket S3 managé reste possible via les mêmes variables, à condition de poser sa
+région dans `region_name` du template.
 
 ## annuaire ouvert, et sa reconstruction
 

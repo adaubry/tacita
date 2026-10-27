@@ -33,8 +33,8 @@ function message(partiel: Partial<MessageAffiche> = {}): MessageAffiche {
   return {
     cle: "$un",
     eventId: "$un",
-    auteur: "@adam:tacita.test",
-    nom: "adam",
+    auteur: "@alice:tacita.test",
+    nom: "alice",
     texte: "on se voit demain ?",
     horodatage: LUNDI_10H,
     moi: false,
@@ -67,7 +67,7 @@ const rendreMessage = (props: Partial<Parameters<typeof MessageObject>[0]> = {})
   return actions;
 };
 
-const carteMessage = (nom = "adam") => screen.getByLabelText(`Message de ${nom}`);
+const carteMessage = (nom = "alice") => screen.getByLabelText(`Message de ${nom}`);
 
 afterEach(() => {
   cleanup();
@@ -75,43 +75,43 @@ afterEach(() => {
 });
 
 describe("regroupement Discord : la table de cas de shouldShowHeader", () => {
-  const adam = message({ auteur: "@adam:tacita.test", horodatage: LUNDI_10H });
+  const alice = message({ auteur: "@alice:tacita.test", horodatage: LUNDI_10H });
 
   it("le premier message porte toujours son en-tête", () => {
-    expect(shouldShowHeader(undefined, adam)).toBe(true);
+    expect(shouldShowHeader(undefined, alice)).toBe(true);
   });
 
   it("un message du même auteur, dans la fenêtre, s'appende sans en-tête", () => {
     const suivant = message({ horodatage: LUNDI_10H + FENETRE_GROUPE_MS - 1 });
-    expect(shouldShowHeader(adam, suivant)).toBe(false);
+    expect(shouldShowHeader(alice, suivant)).toBe(false);
   });
 
   it("au-delà de cinq minutes, l'en-tête revient", () => {
     const suivant = message({ horodatage: LUNDI_10H + FENETRE_GROUPE_MS + 1 });
-    expect(shouldShowHeader(adam, suivant)).toBe(true);
+    expect(shouldShowHeader(alice, suivant)).toBe(true);
   });
 
   it("une interruption par un autre auteur rouvre un groupe", () => {
     const zoe = message({ auteur: "@zoe:tacita.test", horodatage: LUNDI_10H + 1000 });
-    expect(shouldShowHeader(adam, zoe)).toBe(true);
-    // Et le message suivant d'adam aussi, même à la seconde : c'est l'interruption qui
+    expect(shouldShowHeader(alice, zoe)).toBe(true);
+    // Et le message suivant d'alice aussi, même à la seconde : c'est l'interruption qui
     // compte, pas le temps écoulé.
     expect(shouldShowHeader(zoe, message({ horodatage: LUNDI_10H + 2000 }))).toBe(true);
   });
 
   it("un changement de jour rouvre un groupe même pour le même auteur", () => {
     const lendemain = message({ horodatage: new Date("2026-08-04T09:59:00").getTime() });
-    expect(nouveauJour(adam, lendemain)).toBe(true);
-    expect(shouldShowHeader(adam, lendemain)).toBe(true);
+    expect(nouveauJour(alice, lendemain)).toBe(true);
+    expect(shouldShowHeader(alice, lendemain)).toBe(true);
   });
 
   it("l'en-tête rendu porte le nom et l'heure ; sans en-tête, ni l'un ni l'autre", () => {
     rendreMessage({ entete: true });
-    expect(screen.getAllByText("adam").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("alice").length).toBeGreaterThan(0);
 
     cleanup();
     rendreMessage({ entete: false });
-    expect(screen.queryByText("adam")).toBeNull();
+    expect(screen.queryByText("alice")).toBeNull();
   });
 
   /**
@@ -136,7 +136,7 @@ describe("regroupement Discord : la table de cas de shouldShowHeader", () => {
       status: "queued" as const,
       attempts: 0,
     };
-    expect(depuisFile(entree, "adam", "@adam:tacita.test", "mxc://tacita.test/photo").avatar).toBe(
+    expect(depuisFile(entree, "alice", "@alice:tacita.test", "mxc://tacita.test/photo").avatar).toBe(
       "mxc://tacita.test/photo",
     );
 
@@ -401,13 +401,13 @@ describe("glissement gauche : répondre", () => {
     render(
       <Composer
         mentions={[]}
-        contexte={{ libelle: "Réponse à adam", extrait: "on se voit demain ?", onAnnuler }}
+        contexte={{ libelle: "Réponse à alice", extrait: "on se voit demain ?", onAnnuler }}
         onEnvoyer={vi.fn()}
         onFrappe={vi.fn()}
       />,
     );
 
-    expect(screen.getByText(/Réponse à adam/)).toBeTruthy();
+    expect(screen.getByText(/Réponse à alice/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Annuler" }));
     expect(onAnnuler).toHaveBeenCalledTimes(1);
   });
@@ -638,7 +638,7 @@ describe("conversation starter : premier élément, actions selon le salon", () 
     render(
       <Timeline
         messages={[message()]}
-        starter={<ConversationStarter nom="adam" sousTitre="@adam:tacita.test" direct />}
+        starter={<ConversationStarter nom="alice" sousTitre="@alice:tacita.test" direct />}
         onRepondre={vi.fn()}
         onHold={vi.fn()}
         onReagir={vi.fn()}
@@ -658,8 +658,8 @@ describe("conversation starter : premier élément, actions selon le salon", () 
     const onBloquer = vi.fn();
     render(
       <ConversationStarter
-        nom="adam"
-        sousTitre="@adam:tacita.test"
+        nom="alice"
+        sousTitre="@alice:tacita.test"
         direct
         onBloquer={onBloquer}
         onRetirer={vi.fn()}
@@ -689,7 +689,7 @@ describe("conversation starter : premier élément, actions selon le salon", () 
   });
 
   it("une action que personne ne branche n'est pas rendue en bouton inerte", () => {
-    render(<ConversationStarter nom="adam" sousTitre="@adam:tacita.test" direct />);
+    render(<ConversationStarter nom="alice" sousTitre="@alice:tacita.test" direct />);
     expect(screen.queryByText("Bloquer")).toBeNull();
   });
 });
@@ -703,11 +703,11 @@ describe("typing en lecture, mentions à la saisie", () => {
   };
 
   it("l'indicateur nomme une personne, et compte au-delà", () => {
-    rendreComposer({ ecrivent: ["adam"] });
-    expect(screen.getByText(/adam est en train d'écrire/)).toBeTruthy();
+    rendreComposer({ ecrivent: ["alice"] });
+    expect(screen.getByText(/alice est en train d'écrire/)).toBeTruthy();
 
     cleanup();
-    rendreComposer({ ecrivent: ["adam", "zoé"] });
+    rendreComposer({ ecrivent: ["alice", "zoé"] });
     expect(screen.getByText(/2 personnes/)).toBeTruthy();
   });
 

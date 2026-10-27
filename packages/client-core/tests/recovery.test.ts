@@ -16,7 +16,7 @@ vi.mock("matrix-js-sdk", async () => (await import("./mocks")).sdkModule());
 
 const config: SessionConfig = {
   homeserverUrl: "https://tacita.test",
-  identifiant: "adam",
+  identifiant: "alice",
   motDePasse: "motdepasse-essai",
   indexedDB: new IDBFactory(),
 };
@@ -119,7 +119,7 @@ describe("clé de récupération E2EE obligatoire à l'inscription", () => {
       null,
       {
         type: "m.login.password",
-        identifier: { type: "m.id.user", user: "@luca:tacita.test" },
+        identifier: { type: "m.id.user", user: "@bob:tacita.test" },
         password: config.motDePasse,
         session: "sessionUia",
       },
@@ -399,7 +399,7 @@ describe("la clé de récupération ouvre une session", () => {
 
     const [, url, corps] = client.http.requestOtherUrl.mock.calls[0]!;
     expect(url).toContain(CHEMIN);
-    expect(corps).toMatchObject({ user: "adam" });
+    expect(corps).toMatchObject({ user: "alice" });
     // La clé part en base64 des 32 octets, pas dans sa forme lisible : c'est ce que le
     // module décode (`b64decode(validate=True)`), et la jonction n'a pas d'autre garde.
     expect(atob((corps as { recovery_key: string }).recovery_key)).toHaveLength(32);
@@ -594,7 +594,7 @@ describe("voir ses appareils, et pouvoir les déconnecter", () => {
       ["AUTRE"],
       {
         type: "m.login.password",
-        identifier: { type: "m.id.user", user: "@luca:tacita.test" },
+        identifier: { type: "m.id.user", user: "@bob:tacita.test" },
         password: config.motDePasse,
         session: "sessionUia",
       },

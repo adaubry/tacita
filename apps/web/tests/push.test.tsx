@@ -90,7 +90,7 @@ const setPusher = vi.fn(async (pusher: { app_id: string; pushkey: string; data: 
 const session = () =>
   asSession({
     client: {
-      getUserId: () => "@luca:t",
+      getUserId: () => "@bob:t",
       getDeviceId: () => "D1",
       on: vi.fn(),
       off: vi.fn(),

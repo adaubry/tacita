@@ -39,9 +39,9 @@ vi.mock("@tacita/client-core", async (original) => ({
 /** Les paquets 04–10 sont mockés à leurs interfaces. */
 const conversation = (partiel: Partial<Conversation> = {}): Conversation => ({
   roomId: "!dm:t",
-  name: "adam",
+  name: "alice",
   direct: true,
-  peerId: "@adam:t",
+  peerId: "@alice:t",
   preview: "",
   timestamp: 0,
   unread: 0,
@@ -54,8 +54,8 @@ const salons = vi.fn<() => Conversation[]>(() => [conversation()]);
 const niveauDe = vi.fn<() => RoomNotificationLevel>(() => "all");
 const poserNiveau = vi.fn(async () => {});
 const listeMembres = vi.fn(() => [
-  { userId: "@luca:t", name: "luca", powerLevel: 100 },
-  { userId: "@adam:t", name: "adam", powerLevel: 0 },
+  { userId: "@bob:t", name: "bob", powerLevel: 100 },
+  { userId: "@alice:t", name: "alice", powerLevel: 0 },
 ]);
 const droitKick = vi.fn(() => true);
 const enAttente = vi.fn<() => { userId: string; name: string }[]>(() => []);
@@ -128,8 +128,8 @@ const rendreAvecSession = (noeud: React.ReactNode) =>
 const session = () =>
   asSession({
     client: {
-      getUserId: () => "@luca:t",
-      getUser: () => ({ displayName: "luca" }),
+      getUserId: () => "@bob:t",
+      getUser: () => ({ displayName: "bob" }),
       getAccessToken: () => "jeton",
       // le provider écoute le refus de jeton du SDK.
       on: vi.fn(),
@@ -359,7 +359,7 @@ describe("Info buttons : quatre boutons, et le premier suit la variante", () => 
     });
 
     // Le bouton n'attend plus une adresse entière : le domaine vient du compte courant
-    // (`@luca:t`), qui est le seul du déploiement.
+    // (`@bob:t`), qui est le seul du déploiement.
     const bouton = screen.getByRole("button", { name: "Inviter" });
     expect(bouton.getAttribute("aria-disabled")).not.toBe("true");
     fireEvent.click(bouton);
@@ -400,7 +400,7 @@ describe("Options : les éphémères n'existent pas, le kick se mérite", () => 
     droitKick.mockReturnValue(false);
     render(<MembresGroupe session={session()} roomId="!g:t" />);
 
-    expect(screen.getByText("luca")).toBeTruthy();
+    expect(screen.getByText("bob")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Exclure" })).toBeNull();
   });
 
@@ -409,7 +409,7 @@ describe("Options : les éphémères n'existent pas, le kick se mérite", () => 
 
     fireEvent.click(screen.getAllByRole("button", { name: "Exclure" })[0]!);
     await waitFor(() =>
-      expect(exclure).toHaveBeenCalledWith(expect.anything(), "!g:t", "@luca:t"),
+      expect(exclure).toHaveBeenCalledWith(expect.anything(), "!g:t", "@bob:t"),
     );
   });
 
@@ -421,7 +421,7 @@ describe("Options : les éphémères n'existent pas, le kick se mérite", () => 
       // le double en test aussi. Cet écran-ci n'appelle que `emettreGroupe`.
       emettreAmi: vi.fn(async () => ({ id: "l2", token: "jeton-ami", expiresAt: 0 })),
       revoquer: vi.fn(async () => {}),
-      resoudre: vi.fn(async () => ({ kind: "group" as const, issuer: "@luca:t", roomId: "!g:t" })),
+      resoudre: vi.fn(async () => ({ kind: "group" as const, issuer: "@bob:t", roomId: "!g:t" })),
     };
     render(<LienInvitation session={session()} roomId="!g:t" liens={liens} origine="https://tacita.test" />);
 
@@ -671,7 +671,7 @@ describe("voir ses appareils, et pouvoir en fermer un", () => {
       revoquer,
       appareils,
       session: asSession({
-        client: { getUserId: () => "@luca:t", on: vi.fn(), off: vi.fn() },
+        client: { getUserId: () => "@bob:t", on: vi.fn(), off: vi.fn() },
         appareils,
         revoquerAppareils: revoquer,
       } as never),

@@ -30,25 +30,25 @@ let ctx: ReturnType<typeof fakeSession>;
 
 beforeEach(() => {
   ctx = fakeSession({
-    members: [fakeMember("@luca:tacita.test", "luca", 100), fakeMember("@adam:tacita.test", "adam")],
+    members: [fakeMember("@bob:tacita.test", "bob", 100), fakeMember("@alice:tacita.test", "alice")],
     pinned: ["$epingle"],
   });
 });
 
 describe("DM et groupes, chiffrés dès la création", () => {
   it("un DM est un salon à 2 marqué is_direct et chiffré à la création", async () => {
-    await createDirectMessage(ctx.session, "@adam:tacita.test");
+    await createDirectMessage(ctx.session, "@alice:tacita.test");
     const [opts] = ctx.client.createRoom.mock.calls[0]!;
-    expect(opts).toMatchObject({ is_direct: true, invite: ["@adam:tacita.test"] });
+    expect(opts).toMatchObject({ is_direct: true, invite: ["@alice:tacita.test"] });
     expect(opts.initial_state).toEqual([
       { type: "m.room.encryption", state_key: "", content: { algorithm: "m.megolm.v1.aes-sha2" } },
     ]);
   });
 
   it("un groupe est chiffré à la création lui aussi", async () => {
-    await createGroupChat(ctx.session, "équipe", ["@adam:tacita.test"]);
+    await createGroupChat(ctx.session, "équipe", ["@alice:tacita.test"]);
     const [opts] = ctx.client.createRoom.mock.calls[0]!;
-    expect(opts).toMatchObject({ name: "équipe", invite: ["@adam:tacita.test"] });
+    expect(opts).toMatchObject({ name: "équipe", invite: ["@alice:tacita.test"] });
     expect(opts.initial_state?.[0]?.type).toBe("m.room.encryption");
     expect(opts.is_direct).toBeUndefined();
   });
@@ -90,14 +90,14 @@ describe("épinglage via m.room.pinned_events, état non chiffré", () => {
 
 describe("power levels numériques, aucun rôle nommé", () => {
   it("lit le power level d'un membre tel quel", () => {
-    expect(powerLevelOf(ctx.session, ROOM, "@luca:tacita.test")).toBe(100);
-    expect(powerLevelOf(ctx.session, ROOM, "@adam:tacita.test")).toBe(0);
+    expect(powerLevelOf(ctx.session, ROOM, "@bob:tacita.test")).toBe(100);
+    expect(powerLevelOf(ctx.session, ROOM, "@alice:tacita.test")).toBe(0);
     expect(powerLevelOf(ctx.session, ROOM, "@inconnu:tacita.test")).toBe(0);
   });
 
   it("écrit un power level via le SDK", async () => {
-    await setPowerLevel(ctx.session, ROOM, "@adam:tacita.test", 50);
-    expect(ctx.client.setPowerLevel).toHaveBeenCalledWith(ROOM, "@adam:tacita.test", 50);
+    await setPowerLevel(ctx.session, ROOM, "@alice:tacita.test", 50);
+    expect(ctx.client.setPowerLevel).toHaveBeenCalledWith(ROOM, "@alice:tacita.test", 50);
   });
 
   it("expose le compteur de membres du salon", () => {
@@ -111,44 +111,44 @@ describe("power levels numériques, aucun rôle nommé", () => {
 
   it("expose la liste des membres rejoints", () => {
     expect(members(ctx.session, ROOM).map((membre) => membre.userId)).toEqual([
-      "@luca:tacita.test",
-      "@adam:tacita.test",
+      "@bob:tacita.test",
+      "@alice:tacita.test",
     ]);
   });
 
   it("le droit d'exclure exige le niveau requis **et** d'être au-dessus de la cible", () => {
-    // @luca est à 100, le seuil `kick` du salon à 50, @adam à 0.
-    expect(canKick(ctx.session, ROOM, "@adam:tacita.test")).toBe(true);
+    // @bob est à 100, le seuil `kick` du salon à 50, @alice à 0.
+    expect(canKick(ctx.session, ROOM, "@alice:tacita.test")).toBe(true);
   });
 
   it("à égalité de power level, Matrix refuse — le prédicat aussi", () => {
     ctx = fakeSession({
       members: [
-        fakeMember("@luca:tacita.test", "luca", 100),
-        fakeMember("@adam:tacita.test", "adam", 100),
+        fakeMember("@bob:tacita.test", "bob", 100),
+        fakeMember("@alice:tacita.test", "alice", 100),
       ],
     });
-    expect(canKick(ctx.session, ROOM, "@adam:tacita.test")).toBe(false);
+    expect(canKick(ctx.session, ROOM, "@alice:tacita.test")).toBe(false);
   });
 
   it("sous le seuil du salon, aucun droit — même sur quelqu'un de plus bas", () => {
     ctx = fakeSession({
       members: [
-        fakeMember("@luca:tacita.test", "luca", 10),
-        fakeMember("@adam:tacita.test", "adam", 0),
+        fakeMember("@bob:tacita.test", "bob", 10),
+        fakeMember("@alice:tacita.test", "alice", 0),
       ],
       kickLevel: 50,
     });
-    expect(canKick(ctx.session, ROOM, "@adam:tacita.test")).toBe(false);
+    expect(canKick(ctx.session, ROOM, "@alice:tacita.test")).toBe(false);
   });
 
   it("s'exclure soi-même n'est pas un kick", () => {
-    expect(canKick(ctx.session, ROOM, "@luca:tacita.test")).toBe(false);
+    expect(canKick(ctx.session, ROOM, "@bob:tacita.test")).toBe(false);
   });
 
   it("l'exclusion et l'invitation passent par le SDK, sans détour", async () => {
-    await kick(ctx.session, ROOM, "@adam:tacita.test");
-    expect(ctx.client.kick).toHaveBeenCalledWith(ROOM, "@adam:tacita.test", undefined);
+    await kick(ctx.session, ROOM, "@alice:tacita.test");
+    expect(ctx.client.kick).toHaveBeenCalledWith(ROOM, "@alice:tacita.test", undefined);
 
     await invite(ctx.session, ROOM, "@mira:tacita.test");
     expect(ctx.client.invite).toHaveBeenCalledWith(ROOM, "@mira:tacita.test");
@@ -269,13 +269,13 @@ describe("le sas d'entrée : knock, et l'invitation native qui le clôt", () => 
   it("ceux qui attendent se lisent dans l'appartenance knock, pas dans les membres", () => {
     const attente = fakeMember("@mira:tacita.test", "mira");
     const avecKnock = fakeSession({
-      members: [fakeMember("@luca:tacita.test", "luca", 100)],
+      members: [fakeMember("@bob:tacita.test", "bob", 100)],
       knockers: [attente],
     });
 
     expect(knockers(avecKnock.session, ROOM).map((m) => m.userId)).toEqual(["@mira:tacita.test"]);
     // Et surtout : ils ne sont pas comptés comme membres du groupe.
-    expect(members(avecKnock.session, ROOM).map((m) => m.userId)).toEqual(["@luca:tacita.test"]);
+    expect(members(avecKnock.session, ROOM).map((m) => m.userId)).toEqual(["@bob:tacita.test"]);
     expect(memberCount(avecKnock.session, ROOM)).toBe(1);
   });
 

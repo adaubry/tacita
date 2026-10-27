@@ -5,7 +5,7 @@ import { CHAMP_BANNIERE } from "../src/social";
 import { fakeSession } from "./session-mock";
 
 /** `getUserId()` du mock : c'est le seed, donc ce qui rend les images reproductibles. */
-const MOI = "@luca:tacita.test";
+const MOI = "@bob:tacita.test";
 
 /** Un faux téléversement : rend un `mxc://` distinct par image, et garde les SVG reçus. */
 function fauxTeleversement() {
@@ -36,7 +36,7 @@ describe("images par défaut : deux styles, un seed, aucun réseau", () => {
   });
 
   it("pose les deux images sur un profil vierge", async () => {
-    const { session, client } = fakeSession({ profile: { displayname: "luca" } });
+    const { session, client } = fakeSession({ profile: { displayname: "bob" } });
     const { recus, televerser } = fauxTeleversement();
 
     await poserImagesParDefaut(session, televerser);

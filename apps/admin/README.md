@@ -91,13 +91,13 @@ dans un service absent.
 ## `init` — préparer `infra/.env`
 
 Il fabrique ce que `doctor` se contente de réclamer : les secrets — ceux de Synapse, de
-S3 et du SFU LiveKit —, la paire VAPID, la clé KMS de MinIO et le domaine.
+S3 et du SFU LiveKit —, la paire VAPID, le secret RPC de Garage et le domaine.
 
 Deux règles le gouvernent, et ce sont elles qui le rendent sûr à relancer :
 
 1. **Rejouable.** Une valeur déjà posée n'est jamais régénérée. Un macaroon réécrit
-   invaliderait les sessions ouvertes ; une clé KMS réécrite rendrait illisibles les
-   médias déjà stockés ; un `SERVER_NAME` réécrit abandonnerait le homeserver, puisque ce
+   invaliderait les sessions ouvertes ; un secret S3 réécrit ferait refuser à Garage de
+   démarrer, la clé étant déjà associée à l'ancien ; un `SERVER_NAME` réécrit abandonnerait le homeserver, puisque ce
    nom entre dans chaque identifiant Matrix et chaque signature d'appareil.
 2. **Rien ne s'écrase en silence.** Chaque clé est portée au compte rendu, y compris
    celles qu'il n'a pas touchées, avec `généré`, `renseigné` ou `conservé`.
@@ -176,7 +176,7 @@ une reconnexion, pas par une réinstallation.
 
 **Configuration** — `infra/.env` : le nom du serveur, les secrets — la paire LiveKit
 comprise, depuis que les appels font partie de la pile —, la paire VAPID et son sujet, la
-plage d'adresses autorisée, la clé KMS.
+plage d'adresses autorisée, les clés Garage.
 
 Les deux **pannes muettes** du dépôt sont couvertes ici. Une clé VAPID mal recopiée fait
 redémarrer la passerelle en boucle pendant que `docker compose ps` affiche la pile debout.

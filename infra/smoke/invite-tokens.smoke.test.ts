@@ -22,7 +22,7 @@ const { POSTGRES_USER, POSTGRES_PASSWORD } = process.env;
 // courants. Le service, lui, joint la base par le réseau du compose.
 const DATABASE_URL = `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:55432/invite_tokens`;
 
-const LUCA = "@luca:tacita.test";
+const BOB = "@bob:tacita.test";
 const MAINTENANT = Date.now();
 
 let pool: pg.Pool;
@@ -44,7 +44,7 @@ afterAll(async () => {
 const lien = (maxUses: number, tokenHash: string) =>
   store.create({
     tokenHash,
-    issuer: LUCA,
+    issuer: BOB,
     kind: "friend",
     roomId: null,
     expiresAt: MAINTENANT + 86_400_000,
@@ -79,7 +79,7 @@ describe("la consommation est atomique contre un vrai PostgreSQL", () => {
     await lien(2, "empreinte-gardes");
 
     // son propre lien : rien n'est consommé.
-    expect(await store.consume("empreinte-gardes", LUCA, MAINTENANT)).toBeUndefined();
+    expect(await store.consume("empreinte-gardes", BOB, MAINTENANT)).toBeUndefined();
 
     // le même porteur deux fois : le second n'obtient rien de plus, et
     // `find` le voit comme une reprise.

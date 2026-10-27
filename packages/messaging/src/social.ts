@@ -185,7 +185,7 @@ const LOCALPART_SEUL = /^@?[a-z0-9._=/+-]+$/;
 /**
  * **la forme canonique de ce que l'utilisateur a tapé**, quand c'en est une.
  *
- * `@adam:chat.example.org`, `@adam` et `adam` désignent la même personne sur un
+ * `@alice:chat.example.org`, `@alice` et `alice` désignent la même personne sur un
  * déploiement sans fédération, et l'utilisateur ne devrait pas avoir à écrire les deux
  * tiers d'une adresse qu'il ne choisit pas. Rend `undefined` quand la saisie n'a pas la
  * forme d'un identifiant — un nom d'affichage, un prénom avec une majuscule, une phrase.
@@ -243,13 +243,13 @@ export async function searchUsers(
    */
   /*
    * **Le domaine ne se tape plus.** La rédaction précédente n'empruntait le chemin du
-   * profil que sur un identifiant *complet* : taper « adam » n'interrogeait que
+   * profil que sur un identifiant *complet* : taper « alice » n'interrogeait que
    * l'annuaire, muet à l'époque (voir ci-dessus), et il fallait donc écrire
-   * `@adam:chat.example.org` en entier pour trouver qui que ce soit. Signalé par les
+   * `@alice:chat.example.org` en entier pour trouver qui que ce soit. Signalé par les
    * utilisateurs, et c'est bien ce que le code faisait.
    *
    * Le domaine étant unique (fédération désactivée), le compléter n'invente
-   * rien : `@adam` ne peut désigner personne d'autre que `@adam:<notre serveur>`.
+   * rien : `@alice` ne peut désigner personne d'autre que `@alice:<notre serveur>`.
    */
   const complet = identifiantComplet(recherche, domaineLocal(session));
 

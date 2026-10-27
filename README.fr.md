@@ -37,7 +37,7 @@ Tacita n'est pas une application qu'on pointe vers le serveur de quelqu'un d'aut
 | --- | --- |
 | **Synapse** | serveur Matrix, salons chiffrés |
 | **PostgreSQL** | sa base de données |
-| **MinIO** | stockage S3 des blobs média chiffrés |
+| **Garage** | stockage objet S3 des blobs média chiffrés |
 | **LiveKit + Element Call** | appels audio et vidéo, en widget |
 | **nginx** | terminaison TLS, certificats Let's Encrypt |
 | **Passerelle push** | relais Web Push (VAPID) — Sygnal ne parle qu'APNs et FCM |
