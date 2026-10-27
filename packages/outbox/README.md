@@ -29,6 +29,13 @@ outbox.dispose(); // au démontage : coupe le timer et ferme la base
 - **Le `txnId` ne bouge jamais.** C'est lui qui rend les retries sûrs : même
   transaction, même `event_id` côté serveur. `retry()` remet le backoff à zéro,
   pas l'identifiant.
+- **Une reprise passe par l'écho que le SDK a gardé.** Un envoi raté laisse son
+  écho local dans la timeline, en `NOT_SENT`, indexé par `txnId` — et le SDK
+  refuse un second `sendEvent` sous le même `txnId`. La file renvoie donc cet
+  écho (`resendEvent`) quand il existe, et ne repasse par `sendEvent` qu'après un
+  rechargement, où il n'existe plus. `remove()` l'annule (`cancelPendingEvent`) :
+  sinon il resterait dans la timeline, rendu comme un message parti. Prouvé
+  contre le vrai client dans `tests/sdk-reel.test.ts`.
 
 ## Rien ne part en clair
 

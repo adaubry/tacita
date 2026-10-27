@@ -13,7 +13,7 @@
  * Un salon non chiffré fait échouer l'entrée (`NOT_ENCRYPTED`) plutôt que d'envoyer.
  */
 import type { Session } from "@tacita/client-core";
-import { ClientEvent, SyncState } from "matrix-js-sdk";
+import { ClientEvent, EventStatus, SyncState, type MatrixEvent } from "matrix-js-sdk";
 
 import { byQueuedAt, type OutboxEntry, type TeleversementEnAttente } from "./entry";
 import { openOutboxStore } from "./store";
@@ -177,6 +177,23 @@ export async function createOutbox(
   };
 
   /**
+   * **L'écho local qu'un envoi raté laisse dans la timeline du SDK.**
+   *
+   * `sendEvent` pose un écho indexé par `txnId`, et un échec le laisse en place, en
+   * `NOT_SENT` — le SDK ne l'oublie qu'à l'écho distant. Rappeler `sendEvent` avec le
+   * même `txnId` était donc refusé avant tout réseau (« known txnId ») : l'erreur, sans
+   * statut, passait pour une coupure, et l'entrée réessayait sans jamais rien envoyer
+   * jusqu'à finir `failed` — renvoi manuel compris. Aucun mock ne pouvait le voir : un
+   * `sendEvent` mocké ne retient rien (`tests/sdk-reel.test.ts`).
+   *
+   * Absent après un rechargement : le SDK ne persiste pas ses échos, la file si.
+   */
+  const echoNonEnvoye = (entry: OutboxEntry): MatrixEvent | undefined => {
+    const echo = session.client.getRoom(entry.roomId)?.getEventForTxnId(entry.txnId);
+    return echo?.status === EventStatus.NOT_SENT ? echo : undefined;
+  };
+
+  /**
    * Tête de file de chaque salon : les seules entrées qui peuvent partir
    * (FIFO par salon). C'est aussi elle qui fixe le prochain réveil —
    * viser une entrée coincée derrière ferait tourner le timer à vide.
@@ -256,12 +273,21 @@ export async function createOutbox(
         mark({ ...entry, status: "sending" });
       }
 
-      await session.client.sendEvent(
-        entry.roomId,
-        EVENT_TYPE as never,
-        entry.content as never,
-        entry.txnId,
-      );
+      // Une reprise passe par l'écho que le SDK a gardé : c'est le chemin qu'il prévoit
+      // pour un envoi raté, et le seul qu'il accepte sous le même `txnId`. Son contenu
+      // est déjà le bon — les téléversements sont faits avant le premier `sendEvent`.
+      const echo = echoNonEnvoye(entry);
+      const room = session.client.getRoom(entry.roomId);
+      if (echo && room) {
+        await session.client.resendEvent(echo, room);
+      } else {
+        await session.client.sendEvent(
+          entry.roomId,
+          EVENT_TYPE as never,
+          entry.content as never,
+          entry.txnId,
+        );
+      }
       await drop(entry.txnId);
       return true;
     } catch (error) {
@@ -385,7 +411,17 @@ export async function createOutbox(
       await flush();
     },
 
-    remove: drop,
+    async remove(txnId) {
+      /*
+       * L'écho raté s'en va avec l'entrée. L'UI le masque tant que la file la tient ;
+       * laissé là, il redevenait visible à l'abandon — un message jamais parti, rendu
+       * comme les autres (interdit n°13).
+       */
+      const entry = entries.get(txnId);
+      const echo = entry && echoNonEnvoye(entry);
+      if (echo) session.client.cancelPendingEvent(echo);
+      await drop(txnId);
+    },
 
     pending(roomId) {
       return [...entries.values()].filter((entry) => entry.roomId === roomId).sort(byQueuedAt);

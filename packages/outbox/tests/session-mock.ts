@@ -28,6 +28,9 @@ export function fakeSession(indexedDB: IDBFactory = new IDBFactory()) {
   const client = {
     getSyncState: vi.fn(() => syncState),
     makeTxnId: vi.fn(() => `txn-${txnCounter++}`),
+    // Aucun salon connu, donc aucun écho local : ce faux `sendEvent` n'en pose pas.
+    // Ce que le SDK garde d'un envoi raté se prouve contre le vrai (`sdk-reel.test.ts`).
+    getRoom: vi.fn((_roomId: string) => null),
     sendEvent: vi.fn(
       async (_roomId: string, _type: string, _content: object, txnId?: string) => ({
         event_id: `$evt-${txnId}`,
