@@ -143,6 +143,45 @@ describe("limitation de débit par IP", () => {
     expect((await appel("POST", "/links/x/resolve", { ip: "198.51.100.4" })).status).not.toBe(429);
   });
 
+  /**
+   * Relevé en pentest : `issue` n'était bridé par rien. Un compte authentifié pouvait
+   * créer des liens en boucle et faire grossir `invite_tokens` sans fin — un déni de
+   * service par la base, pas par le CPU, donc lent à voir et long à défaire.
+   */
+  it("la création de liens est plafonnée elle aussi, et sur son propre budget", async () => {
+    const serveur = createInviteService({
+      store: createMemoryStore(),
+      matrix,
+      maxResolvesPerWindow: 3,
+      maxWritesPerWindow: 2,
+    });
+    await new Promise<void>((resolve) => serveur.listen(0, "127.0.0.1", resolve));
+    const adresse = `http://127.0.0.1:${(serveur.address() as AddressInfo).port}`;
+
+    const poster = () =>
+      fetch(`${adresse}/links`, {
+        method: "POST",
+        headers: {
+          authorization: "Bearer jeton-bob",
+          "content-type": "application/json",
+          "x-forwarded-for": "203.0.113.9",
+        },
+        body: JSON.stringify({ kind: "friend" }),
+      }).then((reponse) => reponse.status);
+
+    const statuts = [await poster(), await poster(), await poster()];
+    // Le budget d'écriture est distinct de celui de résolution : une rafale de
+    // résolutions ne doit pas empêcher quelqu'un de créer son lien.
+    const resolution = await fetch(`${adresse}/links/x/resolve`, {
+      method: "POST",
+      headers: { authorization: "Bearer jeton-bob", "x-forwarded-for": "203.0.113.9" },
+    });
+    await new Promise<void>((resolve) => serveur.close(() => resolve()));
+
+    expect(statuts).toEqual([201, 201, 429]);
+    expect(resolution.status).not.toBe(429);
+  });
+
   it("la fenêtre se rouvre quand elle expire", () => {
     const limite = createRateLimit(2, 1_000);
     expect(limite("ip:1", 0)).toBe(true);
