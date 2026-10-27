@@ -11,6 +11,7 @@ import type { Profile } from "@tacita/messaging";
 import { useState, type ReactNode } from "react";
 
 import { ButtonsList } from "../foundation/ButtonsList";
+import { Confirmation } from "../foundation/Confirmation";
 import { IconeAppel, IconeDavantage } from "../foundation/icons";
 import { Button, SegmentedControl, SegmentedControlItem, Text } from "../foundation/primitives";
 import { Sheet } from "../foundation/Sheet";
@@ -223,29 +224,19 @@ export function ProfilAutrui({
 
       {/* DESIGN.md n'autorise la modale d'interruption que pour le destructif — c'est
           exactement le cas : quitter un DM perd son historique local. */}
-      <Sheet
-        ouvert={confirmation !== null}
-        onFermer={() => setConfirmation(null)}
-        ancrage="centre"
-        titre={texte?.titre ?? "Confirmation"}
-      >
-        {texte && (
-          <div style={{ display: "grid", gap: "var(--spacing-3)", padding: "var(--spacing-4)" }}>
-            <Text type="body" color="secondary">
-              {texte.corps}
-            </Text>
-            <div style={{ display: "flex", gap: "var(--spacing-2)", justifyContent: "flex-end" }}>
-              <Button label="Annuler" variant="ghost" onClick={() => setConfirmation(null)} />
-              <Button
-                label={texte.action}
-                variant={confirmation === "debloquer" ? "primary" : "destructive"}
-                isLoading={enCours}
-                onClick={() => void confirmer()}
-              />
-            </div>
-          </div>
-        )}
-      </Sheet>
+      {texte && (
+        <Confirmation
+          ouvert={confirmation !== null}
+          titre={texte.titre}
+          corps={texte.corps}
+          action={texte.action}
+          // Débloquer ne casse rien : c'est le seul des trois qui répare.
+          destructif={confirmation !== "debloquer"}
+          enCours={enCours}
+          onConfirmer={() => void confirmer()}
+          onAnnuler={() => setConfirmation(null)}
+        />
+      )}
     </>
   );
 }

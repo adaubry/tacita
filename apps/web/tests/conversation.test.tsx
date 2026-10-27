@@ -15,6 +15,7 @@ import {
   FENETRE_GROUPE_MS,
   finDeGroupe,
   nouveauJour,
+  sansEchoDeFile,
   shouldShowHeader,
   texteAffiche,
   type MessageAffiche,
@@ -234,6 +235,33 @@ describe("l'ordre du paquet, les séparateurs de date, la file d'envoi", () => {
     );
     expect(screen.queryByRole("button", { name: "Réessayer" })).toBeNull();
     expect(screen.getByText(/n'est pas chiffré/)).toBeTruthy();
+  });
+});
+
+describe("le message envoyé ne s'affiche pas en double", () => {
+  /** Juste ce que `sansEchoDeFile` lit d'un événement du SDK. */
+  const evenement = (txnId?: string) => ({ getTxnId: () => txnId });
+
+  it("l'écho local du SDK est masqué tant que la file tient l'entrée", () => {
+    const echo = evenement("m1");
+    const resultat = sansEchoDeFile([evenement(), echo], new Set(["m1"]));
+
+    // Le doublon vient de là : cet écho-ci et l'entrée de file sont le même message.
+    expect(resultat).not.toContain(echo);
+    expect(resultat).toHaveLength(1);
+  });
+
+  it("le même événement repasse dès que la file l'a lâché", () => {
+    const echo = evenement("m1");
+    // Rien d'autre n'a changé : c'est bien le relâchement de la file qui le fait revenir,
+    // et il revient dans la passe de rendu que ce relâchement déclenche — sans trou.
+    expect(sansEchoDeFile([echo], new Set())).toEqual([echo]);
+  });
+
+  it("un événement sans txnId passe toujours — il vient du serveur", () => {
+    // La règle ne doit jamais pouvoir masquer le message de quelqu'un d'autre.
+    const recu = evenement();
+    expect(sansEchoDeFile([recu], new Set(["m1"]))).toEqual([recu]);
   });
 });
 

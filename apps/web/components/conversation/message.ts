@@ -45,6 +45,34 @@ export interface Citation {
   extrait: string;
 }
 
+/**
+ * **L'écho local du SDK, masqué tant que la file tient l'entrée.**
+ *
+ * `client.sendEvent` insère l'événement dans la timeline vivante avant même l'appel
+ * réseau — c'est le défaut `pendingEventOrdering: "chronological"` du SDK, et on ne lui a
+ * jamais demandé autre chose. Or l'écho optimiste de cette app, c'est la file : pendant
+ * l'aller-retour, les deux copies coexistaient, et le message s'affichait en double une
+ * demi-seconde à chaque envoi. Rien ne pouvait l'attraper — un client mocké n'a pas
+ * d'écho local, et la timeline du SDK est le seul endroit où le doublon se formait.
+ *
+ * C'est l'écho du SDK qu'on masque, et non l'entrée de file : la copie de la file est
+ * celle qui porte l'état d'envoi et le bouton de renvoi après échec. Quand la file lâche
+ * l'entrée, c'est son `notify` qui redéclenche le rendu — l'une disparaît et l'autre
+ * apparaît dans la même passe, donc sans trou.
+ *
+ * Un événement sans `txnId` vient du serveur et passe toujours : la règle ne peut pas
+ * masquer le message de quelqu'un d'autre.
+ */
+export function sansEchoDeFile<T extends { getTxnId(): string | undefined }>(
+  evenements: T[],
+  enFile: ReadonlySet<string>,
+): T[] {
+  return evenements.filter((evenement) => {
+    const txnId = evenement.getTxnId();
+    return txnId === undefined || !enFile.has(txnId);
+  });
+}
+
 /** Une entrée de file, rendue comme un message. Le contenu n'est jamais journalisé. */
 export function depuisFile(
   entree: OutboxEntry,

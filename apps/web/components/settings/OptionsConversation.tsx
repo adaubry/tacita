@@ -10,7 +10,13 @@ import { OptionCard } from "../foundation/OptionCard";
  * tenue affichée (interdit n°13). Ce commentaire est la seule trace qu'il en reste, et
  * c'est voulu : sans lui, quelqu'un le rajoutera en croyant à un oubli.
  */
-export type OptionConversation = "theme" | "notifications" | "groupe" | "lien" | "membres";
+export type OptionConversation =
+  | "theme"
+  | "notifications"
+  | "groupe"
+  | "lien"
+  | "membres"
+  | "quitter";
 
 interface OptionsConversationProps {
   direct: boolean;
@@ -47,12 +53,38 @@ export function OptionsConversation({
           titre: "Créer un groupe avec cette personne",
           detail: "Elle sera déjà sélectionnée",
         },
+        /*
+         * **Supprimer la conversation** (demande utilisateur : « il n'est pas possible de
+         * supprimer une conversation avec quelqu'un »).
+         *
+         * Le geste existait côté paquet depuis le début (`leaveConversation`) et n'avait
+         * aucun chemin pour un 1:1 : le seul bouton qui le déclenchait était « retirer des
+         * amis », dans un sous-menu du profil — une autre intention, qui ne se cherche pas
+         * quand on veut effacer une discussion. Un groupe, lui, n'avait aucun chemin du
+         * tout.
+         *
+         * Le détail dit la conséquence vraie et pas la rassurante (interdit n°13) : chez
+         * Matrix on **quitte**, on n'efface pas — l'autre voit le départ, et c'est
+         * l'historique local qu'on perd.
+         */
+        {
+          cle: "quitter",
+          titre: "Supprimer la conversation",
+          detail: "Vous la quittez ; son historique sera perdu sur cet appareil",
+        },
       ]
     : [
         { cle: "theme", titre: "Thème de la conversation", detail: "Fond d'écran, sur cet appareil" },
         { cle: "lien", titre: "Lien d'invitation", detail: "Créer, voir l'expiration, révoquer" },
         { cle: "membres", titre: "Membres", detail: "Voir qui est là" },
         { cle: "notifications", titre: "Notifications", detail: niveauLibelle },
+        // Le mot change avec la variante, l'effet non : « supprimer » mentirait sur un
+        // groupe, qui continue d'exister sans vous.
+        {
+          cle: "quitter",
+          titre: "Quitter le groupe",
+          detail: "Les autres y restent ; son historique sera perdu sur cet appareil",
+        },
       ];
 
   return (
