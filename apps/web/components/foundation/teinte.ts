@@ -67,7 +67,7 @@ export function oklchVersHex(L: number, C: number, H: number, alpha?: number): s
 export const TEINTES: readonly number[] = [0, 30, 60, 90, 120, 240, 270, 300, 330];
 
 /** Clarté et chroma, figés. Seule la teinte angulaire tourne — c'est tout le mécanisme. */
-const CLAIR = { L: 0.42, C: 0.09, voile: 0.1 } as const;
+const CLAIR = { L: 0.42, C: 0.09, voile: 0.2 } as const;
 const SOMBRE = { L: 0.8, C: 0.1, voile: 0.22 } as const;
 
 export interface Teinte {

@@ -51,8 +51,12 @@ interface ConversationAvatarProps {
  * `--_avatar-fallback-color`), exactement comme la forme passe par `--radius-full` juste
  * au-dessus : la primitive est reteintée dans cette portée, pas réécrite. Sans eux il
  * faudrait rivaliser de spécificité avec des classes atomiques régénérées à chaque build.
- * Elle ne touche que les **initiales** — une photo de profil n'a besoin d'aucune couleur
- * derrière elle, et le repli d'Astryx la recouvre de toute façon.
+ *
+ * Ces deux crochets ne teintent que les **initiales**, donc rien du tout dès qu'il y a une
+ * photo — et un compte dont tous les contacts ont une photo ne voyait aucune teinte sur
+ * l'accueil, la maquette ayant supposé des avatars sans photo. D'où l'anneau : il porte la
+ * teinte dans les deux cas, au même endroit, et c'est le seul porteur présent sur un écran
+ * de liste où rien n'est non lu.
  */
 export function ConversationAvatar({
   nom,
@@ -74,9 +78,14 @@ export function ConversationAvatar({
       style={
         {
           "--radius-full": "var(--tacita-radius-avatar)",
+          // Sans largeur définie, la racine s'étire quand elle est l'enfant d'une colonne
+          // flex — invisible tant que rien ne peint cette boîte, puis l'anneau la dessine
+          // en long ovale. Une largeur définie l'emporte sur `align-self: stretch`.
+          width: "fit-content",
           ...(couleurs && {
             "--_avatar-fallback-background": `light-dark(${couleurs.voile.clair}, ${couleurs.voile.sombre})`,
             "--_avatar-fallback-color": `light-dark(${couleurs.encre.clair}, ${couleurs.encre.sombre})`,
+            boxShadow: `0 0 0 2px light-dark(${couleurs.encre.clair}, ${couleurs.encre.sombre})`,
           }),
         } as CSSProperties
       }
