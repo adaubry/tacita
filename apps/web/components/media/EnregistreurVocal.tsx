@@ -271,6 +271,9 @@ export function EnregistreurVocal({ onEnvoyer, portee = globalThis }: Enregistre
         <div
           role="group"
           aria-label="Enregistrement en cours"
+          // Le doigt passe au-dessus de cette barre pendant tout le geste : sans cette
+          // classe, iOS sélectionne le texte qu'elle porte et ouvre sa loupe par-dessus.
+          className="tacita-geste"
           style={{
             position: "absolute",
             inset: 0,
@@ -278,7 +281,15 @@ export function EnregistreurVocal({ onEnvoyer, portee = globalThis }: Enregistre
             alignItems: "center",
             gap: "var(--spacing-2)",
             paddingInline: "var(--spacing-1)",
-            background: "var(--color-background)",
+            /*
+             * `--color-background-body`, et non `--color-background` **qui n'existe pas**.
+             * Une variable inconnue rend la déclaration invalide : le fond restait
+             * transparent, et la barre d'écriture se lisait à travers la barre
+             * d'enregistrement — « Message » et « Glissez vers la poubelle » superposés.
+             * Rien ne le signale, ni le navigateur ni jsdom, qui ne calcule aucune
+             * couleur. C'est le test « aucune variable CSS inventée » qui ferme la porte.
+             */
+            background: "var(--color-background-body)",
             zIndex: 1,
           }}
         >
@@ -307,6 +318,14 @@ export function EnregistreurVocal({ onEnvoyer, portee = globalThis }: Enregistre
       )}
 
       <div
+        /*
+         * **Le maintien est exactement ce qu'iOS lit comme un appui long sur du texte** :
+         * surlignage bleu, poignées de sélection et loupe par-dessus le composer, signalé
+         * dès le premier essai sur iPhone. `.tacita-geste` est la classe que le dépôt a
+         * déjà écrite pour ça — même panne que l'appui long sur un message, même
+         * correctif, et c'est pour cette raison qu'elle n'est pas réécrite ici.
+         */
+        className="tacita-geste"
         style={{
           position: "relative",
           display: "flex",

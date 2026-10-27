@@ -217,6 +217,60 @@ describe("le thème porte les valeurs de DESIGN.md, et rien d'autre", () => {
    * dépôt fait déjà pour les valeurs de configuration. Il ne prouve pas la géométrie ;
    * il empêche la ligne qui la tient de disparaître sans que personne ne le voie.
    */
+  /**
+   * **Aucune variable CSS inventée.**
+   *
+   * Une `var(--nom)` qui ne désigne rien ne produit ni erreur, ni avertissement, ni
+   * repli : la déclaration entière devient invalide et disparaît. Un fond devient
+   * transparent, une couleur d'erreur cesse d'être rouge, et **rien ne le dit** — ni la
+   * console du navigateur, ni jsdom, qui ne calcule aucune couleur. C'est le mode de
+   * panne le plus silencieux de toute la feuille de style.
+   *
+   * Trouvé par trois fois en une session : le fond de la barre d'enregistrement vocal
+   * laissait voir le champ d'écriture au travers (`--color-background`, qui n'existe pas
+   * — c'est `--color-background-body`), et trois messages d'erreur n'étaient pas rouges
+   * (`--color-danger` au lieu de `--color-error`). Aucun des trois n'était visible
+   * autrement qu'à l'œil, sur le bon écran, au bon moment.
+   *
+   * Le vocabulaire admis est la réunion de trois sources, et pas une liste à tenir à la
+   * main : ce qu'Astryx déclare dans sa feuille, ce que notre thème pose, et ce que nos
+   * propres fichiers écrivent — `tokens.css` en `:root`, et les styles qui posent une
+   * variable sur un élément (`"--tacita-teinte-encre": …`, les crochets d'avatar).
+   *
+   * Une `var(--x, repli)` est hors de portée : elle **a** un repli, donc elle dégrade au
+   * lieu de disparaître. Et le motif n'attrape que les noms littéraux : `var(--taille-${n})`
+   * se termine par une interpolation, qu'aucune analyse de texte ne peut résoudre.
+   */
+  it("aucune variable CSS inventée : chaque `var(--x)` sans repli désigne un token qui existe", () => {
+    const feuilleAstryx = lire(
+      "../../node_modules/.pnpm/@astryxdesign+core@0.2.0_@s_2f1e5870477c7775a39999df5148aa43/node_modules/@astryxdesign/core/dist/astryx.css",
+    );
+    const declarees = (source: string) =>
+      (source.match(/--[a-zA-Z0-9_-]+(?=\s*:)/g) ?? []).map((nom) => nom.trim());
+
+    const connues = new Set([
+      ...declarees(feuilleAstryx),
+      ...Object.keys(tokens),
+      ...declarees(lire("components/foundation/tokens.css")),
+      // Ce que le shard pose lui-même sur un élément : `"--x": valeur` dans un style.
+      ...sourcesLivrees().flatMap(({ code }) =>
+        [...code.matchAll(/"(--[a-zA-Z0-9_-]+)"\s*:/g)].map((trouve) => trouve[1]!),
+      ),
+    ]);
+
+    const inventees = new Set<string>();
+    for (const { chemin, code } of sourcesLivrees()) {
+      for (const [, nom, suite] of sansCommentaires(code).matchAll(
+        /var\(\s*(--[a-zA-Z0-9_-]+)\s*([,)])/g,
+      )) {
+        if (suite === ",") continue;
+        if (!connues.has(nom!)) inventees.add(`${nom} (${chemin.split("/web/")[1]})`);
+      }
+    }
+
+    expect([...inventees]).toEqual([]);
+  });
+
   it("les marges d'agent utilisateur des titres sont neutralisées", () => {
     const feuille = sansCommentaires(lire("components/foundation/tokens.css"));
     const regle = feuille.match(/:where\(([^)]*h1[^)]*)\)\s*{([^}]*)}/);

@@ -164,7 +164,7 @@ export function MotDePasse({ session }: { session: Session }) {
         />
 
         {echec === "reseau" && (
-          <Text type="supporting" style={{ color: "var(--color-danger)" }}>
+          <Text type="supporting" style={{ color: "var(--color-error)" }}>
             {MESSAGES.reseau}
           </Text>
         )}

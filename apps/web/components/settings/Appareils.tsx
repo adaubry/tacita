@@ -163,7 +163,7 @@ export function Appareils({ session }: { session: Session }) {
         </Text>
 
         {echec === "reseau" && (
-          <Text type="supporting" style={{ color: "var(--color-danger)" }}>
+          <Text type="supporting" style={{ color: "var(--color-error)" }}>
             {MESSAGES.reseau}
           </Text>
         )}

@@ -266,7 +266,7 @@ export function Connexion({
             qui n'en a pas besoin.
           */}
           {(echec === "reseau" || echec === "refus") && (
-            <Text type="supporting" style={{ color: "var(--color-danger)" }}>
+            <Text type="supporting" style={{ color: "var(--color-error)" }}>
               {MESSAGES[echec]}
             </Text>
           )}
