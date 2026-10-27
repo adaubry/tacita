@@ -215,10 +215,17 @@
  * c'est un bug de design » : or une liste de demandes pose un aplat vert **par carte**. La
  * règle était déjà enfreinte avant les bulles ; celles-ci l'ont seulement rendue visible.
  *
- * L'accent passe donc au voile, et l'encre verte dessus porte le sens. Mesuré : 6,8:1 en
- * clair et 5,5:1 en sombre, au-dessus du seuil AA que DESIGN.md exige de chaque paire.
- * Son voisin destructif-neutre passe en `ghost` dans les composants — deux poids, une
- * seule famille.
+ * L'accent passe donc au voile, et l'encre verte dessus porte le sens. Son voisin
+ * destructif-neutre passe en `ghost` dans les composants — deux poids, une seule famille.
+ *
+ * **La règle vise `[data-variant="primary"]`, pas une classe à poser** (28/10/2026,
+ * « modifier le profil n'est pas à la nouvelle DA »). Elle ne s'appliquait d'abord qu'aux
+ * deux paires d'action, par une classe `tacita-bouton-doux` ; les vingt et un autres
+ * primaires de l'app gardaient l'aplat plein. Deux primaires différents dans une même
+ * app, c'est l'incohérence que cette règle existait pour supprimer. Astryx expose
+ * `data-variant` sur le bouton rendu : viser cet attribut couvre les vingt-trois sites
+ * d'un coup, et le vingt-quatrième sans y penser. La classe a donc été supprimée, pas
+ * généralisée — une classe qu'il faut se rappeler de poser est une règle qu'on oubliera.
  *
  * `background-image` n'est **pas** annulé ici, contrairement à `.tacita-retour` plus haut :
  * les voiles de survol et d'appui d'Astryx passent par cette propriété, et ici ils vont
@@ -228,20 +235,32 @@
  * Les quatre `:not(#\#)` sont l'idiome de StyleX, comme pour `.tacita-retour` : la
  * distribution place ses règles à trois, quatre passent devant sans `!important`.
  */
-.tacita-bouton-doux:not(#\#):not(#\#):not(#\#):not(#\#) {
+button[data-variant="primary"]:not(#\#):not(#\#):not(#\#):not(#\#) {
   /*
    * `--color-accent-muted` vaut 8 % d'alpha : posé sur un bouton, le vert tire vers le
    * gris et le primaire ne s'impose plus. Le fond est donc dérivé de l'accent plutôt que
    * repris du jeton — `color-mix` garde la dépendance, une valeur en dur la romprait au
    * premier changement de palette. Le jeton global n'est pas touché : il sert ailleurs,
    * sur des surfaces où 8 % est le bon poids.
+   *
+   * 20 %, et le même dans les deux thèmes : `--color-accent` porte déjà la bascule, donc
+   * un `light-dark()` par-dessus n'ajouterait qu'un taux à maintenir. Mesuré, encre sur
+   * fond composé — **5,56:1 en clair, 4,98:1 en sombre**. Le sombre est le mur : à 24 %
+   * il tombe à 4,57:1, au ras du seuil AA, parce que le voile éclaircit un fond déjà
+   * sombre et rapproche les deux. C'est lui qui fixe le taux, pas le clair.
    */
-  background-color: light-dark(
-    color-mix(in srgb, var(--color-accent) 16%, transparent),
-    color-mix(in srgb, var(--color-accent) 24%, transparent)
-  );
+  background-color: color-mix(in srgb, var(--color-accent) 20%, transparent);
   color: var(--color-accent);
   border-color: transparent;
+  border-radius: var(--radius-full);
+}
+
+/*
+ * Le secondaire ne prend que la forme. Sa couleur reste celle d'Astryx — il n'a jamais
+ * été un aplat d'accent, donc il n'avait rien à corriger — mais un pavé à coins de 6 px
+ * posé contre une pilule ne forme pas une paire.
+ */
+button[data-variant="secondary"]:not(#\#):not(#\#):not(#\#):not(#\#) {
   border-radius: var(--radius-full);
 }
 

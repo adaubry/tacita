@@ -210,7 +210,6 @@ export function EnregistreurVocal({ onEnvoyer, portee = globalThis }: Enregistre
       <Button
         label="Envoyer le message vocal"
         variant="primary"
-        className="tacita-bouton-doux"
         isIconOnly
         icon={IconeEnvoyer}
         onClick={() => arreter(true)}

@@ -166,7 +166,6 @@ export function AppelEntrant() {
         <Button
           label="Répondre"
           variant="primary"
-          className="tacita-bouton-doux"
           onClick={() => router.push(routeAppel(appel.roomId))}
         />
       </div>

@@ -107,7 +107,6 @@ export function DemandesList({ demandes, onAccepter, onRefuser }: DemandesListPr
                * `secondary` : `danger` est réservé au destructif, et refuser une demande
                * n'efface aucune donnée de l'utilisateur.
                */
-              className="tacita-bouton-doux"
               onClick={() => onAccepter(demande)}
             />
             {/* `ghost` et non `secondary` : le poids suffit à dire laquelle des deux
