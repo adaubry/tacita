@@ -13,6 +13,7 @@ import {
   getPinnedEvents,
   identifiantComplet,
   invite,
+  leaveConversation,
   memberCount,
   messages as listerMessages,
   roomNotificationLevel,
@@ -23,6 +24,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { contactsDeLaSession } from "../../lib/contacts";
 import { NewConversationSheet } from "../accueil/NewConversationSheet";
+import { Confirmation } from "../foundation/Confirmation";
 import { ConversationAvatar } from "../foundation/ConversationAvatar";
 import { cleTeinte } from "../foundation/teinte";
 import { LayoutHeader } from "../foundation/LayoutHeader";
@@ -49,6 +51,17 @@ import { routeConversation } from "../../lib/routes";
 /** Ce qui peut être ouvert par-dessus l'écran : une option, ou le panneau « muter ». */
 type Panneau = OptionConversation | "notifications" | "ajouter";
 
+/**
+ * Tout ne s'ouvre pas dans la feuille générique : « groupe » a la sienne, pré-armée, et
+ * « quitter » est une confirmation centrée, pas un panneau. Un prédicat plutôt que deux
+ * comparaisons recopiées sur `ouvert` puis sur `titre` — elles divergeraient au prochain
+ * cas particulier, et la feuille s'ouvrirait vide ou sans titre.
+ */
+const dansLaFeuille = (
+  panneau: Panneau | undefined,
+): panneau is Exclude<Panneau, "groupe" | "quitter"> =>
+  panneau !== undefined && panneau !== "groupe" && panneau !== "quitter";
+
 /** Le bouton « Options » amène à la section, qui est sur le même écran. */
 const ANCRE_OPTIONS = "options-conversation";
 
@@ -59,6 +72,7 @@ const TITRES: Record<Panneau, string> = {
   lien: "Lien d'invitation",
   membres: "Membres",
   ajouter: "Ajouter un membre",
+  quitter: "Supprimer la conversation",
 };
 
 /**
@@ -77,6 +91,8 @@ export function InfosConversation({ roomId }: { roomId: string }) {
   const [panneau, setPanneau] = useState<Panneau | undefined>();
   const [niveau, setNiveau] = useState<RoomNotificationLevel>("all");
   const [version, setVersion] = useState(0);
+  /** Le départ est en vol : le bouton tourne, et rien ne se referme avant la réponse. */
+  const [enCours, setEnCours] = useState(false);
 
   const salon = useMemo(
     () => (session ? listerConversations(session).find((c) => c.roomId === roomId) : undefined),
@@ -200,10 +216,42 @@ export function InfosConversation({ roomId }: { roomId: string }) {
         }}
       />
 
+      {/*
+       * **Supprimer la conversation, c'est la quitter.** Matrix n'efface rien : le salon
+       * continue d'exister, l'autre voit le départ, et ce qu'on perd est l'historique
+       * local. La confirmation le dit tel quel — promettre une suppression serait
+       * exactement l'interdit n°13.
+       *
+       * `router.replace` et non `push` : revenir en arrière rouvrirait une conversation
+       * qu'on vient de quitter, c'est-à-dire un écran vide sans moyen d'en sortir.
+       */}
+      <Confirmation
+        ouvert={panneau === "quitter"}
+        titre={direct ? "Supprimer cette conversation ?" : "Quitter ce groupe ?"}
+        corps={
+          direct
+            ? "Vous quitterez la conversation. Son historique ne vous sera plus accessible sur cet appareil, et votre interlocuteur verra que vous l'avez quittée."
+            : "Vous quitterez le groupe, qui continuera sans vous. Son historique ne vous sera plus accessible sur cet appareil, et les membres verront votre départ."
+        }
+        action={direct ? "Supprimer" : "Quitter"}
+        enCours={enCours}
+        onAnnuler={() => setPanneau(undefined)}
+        onConfirmer={() => {
+          if (!session) return;
+          setEnCours(true);
+          void leaveConversation(session, roomId)
+            .then(() => router.replace("/"))
+            // Le panneau se referme et le bouton cesse de tourner : l'échec laisse la
+            // conversation en place, ce qui est la vérité de ce qui s'est passé.
+            .catch(() => setPanneau(undefined))
+            .finally(() => setEnCours(false));
+        }}
+      />
+
       <Sheet
-        ouvert={panneau !== undefined && panneau !== "groupe"}
+        ouvert={dansLaFeuille(panneau)}
         onFermer={() => setPanneau(undefined)}
-        titre={panneau && panneau !== "groupe" ? TITRES[panneau] : ""}
+        titre={dansLaFeuille(panneau) ? TITRES[panneau] : ""}
       >
         {panneau === "theme" && (
           <ThemeConversation roomId={roomId} onApplique={() => setVersion((t) => t + 1)} />

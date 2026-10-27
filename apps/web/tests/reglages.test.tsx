@@ -23,9 +23,10 @@ import { lireFondEcran, lireModeMasque } from "../lib/preferences";
 import { sourcesLivrees, sansCommentaires } from "./sources";
 
 const pousser = vi.fn();
+const remplacer = vi.fn();
 vi.mock("next/navigation", () => ({
   usePathname: () => "/profil",
-  useRouter: () => ({ push: pousser, back: vi.fn() }),
+  useRouter: () => ({ push: pousser, replace: remplacer, back: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }));
 
@@ -63,6 +64,7 @@ const regleDAcces = vi.fn(() => "invite" as "invite" | "knock");
 const poserRegle = vi.fn(async () => ({ event_id: "$s" }));
 const exclure = vi.fn(async () => ({}));
 const inviter = vi.fn(async () => ({}));
+const quitter = vi.fn(async () => {});
 
 vi.mock("@tacita/messaging", async (original) => ({
   // `identifiantComplet` est une fonction **pure** du paquet : la mocker
@@ -82,6 +84,7 @@ vi.mock("@tacita/messaging", async (original) => ({
   setJoinRule: (...args: unknown[]) => poserRegle(...(args as [])),
   kick: (...args: unknown[]) => exclure(...(args as [])),
   invite: (...args: unknown[]) => inviter(...(args as [])),
+  leaveConversation: (...args: unknown[]) => quitter(...(args as [])),
   powerLevelOf: (_s: unknown, _r: unknown, userId: string) =>
     listeMembres().find((membre) => membre.userId === userId)?.powerLevel ?? 0,
   roomNotificationLevel: () => niveauDe(),
@@ -368,6 +371,48 @@ describe("Info buttons : quatre boutons, et le premier suit la variante", () => 
   });
 });
 
+describe("supprimer une conversation : le geste passe par une confirmation", () => {
+  const ouvrirLaConfirmation = async (roomId: string, libelle: string) => {
+    rendreAvecSession(<InfosConversation roomId={roomId} />);
+    fireEvent.click(await screen.findByText(libelle));
+  };
+
+  it("en 1:1 : la confirmation dit ce qui se passe vraiment, puis le départ part", async () => {
+    await ouvrirLaConfirmation("!dm:t", "Supprimer la conversation");
+
+    // Interdit n°13 : on ne promet pas une suppression. Matrix n'efface rien — l'autre
+    // voit le départ, et ce qu'on perd est l'historique local.
+    expect(await screen.findByText(/verra que vous l'avez quittée/i)).toBeTruthy();
+    expect(screen.getByText(/plus accessible sur cet appareil/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Supprimer" }));
+
+    await waitFor(() => expect(quitter).toHaveBeenCalledWith(expect.anything(), "!dm:t"));
+    // `replace` et non `push` : revenir en arrière rouvrirait un salon qu'on a quitté.
+    await waitFor(() => expect(remplacer).toHaveBeenCalledWith("/"));
+    expect(pousser).not.toHaveBeenCalledWith("/");
+  });
+
+  it("en groupe : le libellé dit « quitter », et le groupe reste aux autres", async () => {
+    salons.mockReturnValue([
+      conversation({ roomId: "!g:t", name: "équipe", direct: false, peerId: undefined }),
+    ]);
+    await ouvrirLaConfirmation("!g:t", "Quitter le groupe");
+
+    expect(await screen.findByText(/continuera sans vous/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Quitter" }));
+    await waitFor(() => expect(quitter).toHaveBeenCalledWith(expect.anything(), "!g:t"));
+  });
+
+  it("annuler ne quitte rien — un tap seul ne suffit jamais", async () => {
+    await ouvrirLaConfirmation("!dm:t", "Supprimer la conversation");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Annuler" }));
+    expect(quitter).not.toHaveBeenCalled();
+    expect(remplacer).not.toHaveBeenCalled();
+  });
+});
+
 describe("Options : les éphémères n'existent pas, le kick se mérite", () => {
   it("l'option « messages éphémères » est absente du DOM, jamais grisée", () => {
     for (const direct of [true, false]) {
@@ -389,6 +434,17 @@ describe("Options : les éphémères n'existent pas, le kick se mérite", () => 
     expect(screen.getByText("Lien d'invitation")).toBeTruthy();
     expect(screen.getByText("Membres")).toBeTruthy();
     expect(screen.queryByText("Créer un groupe avec cette personne")).toBeNull();
+  });
+
+  it("supprimer une conversation est offert, et le mot suit la variante", () => {
+    render(<OptionsConversation direct niveauLibelle="Tout" onOuvrir={vi.fn()} />);
+    expect(screen.getByText("Supprimer la conversation")).toBeTruthy();
+
+    cleanup();
+    render(<OptionsConversation direct={false} niveauLibelle="Tout" onOuvrir={vi.fn()} />);
+    // « Supprimer » mentirait sur un groupe : il continue d'exister sans vous.
+    expect(screen.getByText("Quitter le groupe")).toBeTruthy();
+    expect(screen.queryByText("Supprimer la conversation")).toBeNull();
   });
 
   it("le niveau de notification courant se lit sans ouvrir l'option", () => {
