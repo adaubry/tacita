@@ -164,9 +164,9 @@ user_directory:
 retention:
   enabled: false
 
-# backend média S3, blobs opaques uniquement (chiffrement client).
-# SSE-S3 activé au niveau du bucket (infra/docker-compose.yml, service minio-init) :
-# défense en profondeur uniquement, l'opérateur détient ces clés.
+# backend média S3, blobs opaques uniquement (chiffrement client). Le bucket vit dans
+# le service `garage` du compose ; `region_name` répète `s3_region` de
+# infra/garage/garage.toml, et infra/tests/homeserver.test.ts tient les deux ensemble.
 media_storage_providers:
   - module: s3_storage_provider.S3StorageProviderBackend
     store_local: true
@@ -174,7 +174,8 @@ media_storage_providers:
     store_synchronous: true
     config:
       bucket: "${S3_BUCKET}"
-      endpoint_url: "http://minio:9000"
+      region_name: "garage"
+      endpoint_url: "http://garage:3900"
       access_key_id: "${S3_ACCESS_KEY_ID}"
       secret_access_key: "${S3_SECRET_ACCESS_KEY}"
 
@@ -227,7 +228,7 @@ password_config:
 #
 # GARDE-FOU : ne pas activer `url_preview_enabled` tant que cette liste n'est pas
 # vide, sans avoir d'abord restreint la plage. Avec l'aperçu d'URL, un utilisateur qui
-# poste un lien ferait requêter l'intérieur du réseau — Postgres, MinIO — par Synapse
+# poste un lien ferait requêter l'intérieur du réseau — Postgres, Garage — par Synapse
 # lui-même. C'est la contrepartie exacte de ce réglage.
 ip_range_whitelist: ${SYNAPSE_IP_RANGE_WHITELIST}
 

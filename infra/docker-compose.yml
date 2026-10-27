@@ -21,41 +21,32 @@ services:
       timeout: 5s
       retries: 10
 
-  minio:
-    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e # RELEASE.2025-09-07
+  # stockage objet des médias — blobs déjà chiffrés côté client, le bucket n'y voit rien.
+  #
+  # `--single-node --default-bucket` amorce tout au premier démarrage depuis le .env :
+  # layout mono-nœud, clé S3 importée telle quelle (identifiant et secret), bucket créé et
+  # autorisé. Les démarrages suivants ne refont rien. Un S3_SECRET_ACCESS_KEY qui aurait
+  # changé fait refuser le démarrage en nommant la cause — le conteneur boucle, Synapse qui
+  # l'attend ne part jamais, et `pnpm admin doctor` le dit.
+  garage:
+    image: dxflrs/garage@sha256:677e5b758e4425a325b811c425c026bf35a4bf42f7ddbaa773de3f4fd779a5a5 # v2.5.0
     restart: unless-stopped
-    command: ["server", "/data", "--console-address", ":9001"]
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
     environment:
-      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY}
-      # KMS mono-clé intégré : requis par MinIO pour honorer `mc encrypt set sse-s3`
-      # En prod avec un vrai S3 (AWS...), SSE-S3 est natif, pas de KMS à gérer.
-      MINIO_KMS_SECRET_KEY: ${MINIO_KMS_SECRET_KEY}
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET}
+      GARAGE_DEFAULT_ACCESS_KEY: ${S3_ACCESS_KEY_ID}
+      GARAGE_DEFAULT_SECRET_KEY: ${S3_SECRET_ACCESS_KEY}
+      GARAGE_DEFAULT_BUCKET: ${S3_BUCKET}
     volumes:
-      - minio-data:/data
+      - ./garage/garage.toml:/etc/garage.toml:ro
+      - garage-data:/var/lib/garage
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      # L'image n'a pas de shell : la CLI en exec direct. Vert = le RPC répond ET le bucket
+      # de l'amorçage existe, donc Synapse peut écrire dès que la condition est remplie.
+      test: ["CMD", "/garage", "bucket", "info", "${S3_BUCKET}"]
       interval: 5s
       timeout: 5s
       retries: 10
-
-  # crée le bucket et active SSE-S3 (défense en profondeur uniquement,
-  # l'opérateur du bucket détient ces clés).
-  minio-init:
-    image: minio/mc@sha256:95b5f3f7969a5c5a9f3a700ba72d5c84172819e13385aaf916e237cf111ab868 # RELEASE.2025-08-13
-    depends_on:
-      minio:
-        condition: service_healthy
-    environment:
-      S3_BUCKET: ${S3_BUCKET}
-      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
-      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - >
-        mc alias set local http://minio:9000 "$$S3_ACCESS_KEY_ID" "$$S3_SECRET_ACCESS_KEY" &&
-        mc mb --ignore-existing local/$$S3_BUCKET &&
-        mc encrypt set sse-s3 local/$$S3_BUCKET
 
   synapse:
     build: ./synapse
@@ -63,8 +54,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
+      garage:
+        condition: service_healthy
     environment:
       SERVER_NAME: ${SERVER_NAME}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -151,5 +142,5 @@ services:
 
 volumes:
   postgres-data:
-  minio-data:
+  garage-data:
   synapse-data:
