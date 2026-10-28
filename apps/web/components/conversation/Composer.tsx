@@ -8,7 +8,7 @@
 "use client";
 
 import type { MentionCandidate } from "@tacita/messaging";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 
 import { IconeEnvoyer } from "../foundation/icons";
 import { Button, ChatComposerInput, Text, createStaticSource } from "../foundation/primitives";
@@ -51,6 +51,12 @@ interface ComposerProps {
    * alors sa place, et aucun micro inerte n'est affiché.
    */
   vocal?: ReactNode;
+  /**
+   * Le clavier reste ouvert après l'envoi (réglage d'appareil, « Écriture »). Sans lui,
+   * il se ferme : le bouton touché est remplacé par le micro dès que le champ se vide,
+   * et le focus part avec lui.
+   */
+  garderClavier?: boolean;
 }
 
 /**
@@ -93,8 +99,10 @@ export function Composer({
   actions,
   actionsEnvoi,
   vocal,
+  garderClavier = false,
 }: ComposerProps) {
   const [texte, setTexte] = useState(texteInitial);
+  const champ = useRef<HTMLDivElement>(null);
   const source = useMemo(() => createStaticSource(mentions), [mentions]);
 
   const envoyer = (valeur: string) => {
@@ -187,6 +195,7 @@ export function Composer({
             au rayon `--radius-chat`, qui existe pour lui. Les boutons sont nus autour,
             comme sur Discord : trois cadres côte à côte feraient trois boîtes à lire. */}
         <div
+          ref={champ}
           style={{
             flex: 1,
             minWidth: 0,
@@ -232,13 +241,27 @@ export function Composer({
         {vocal && texte.trim() === "" ? (
           vocal
         ) : (
+          /*
+           * **Garder le clavier, c'est garder le focus.** Le `mousedown` empêché ne le
+           * laisse pas quitter le champ ; le `focus()` dans le clic le lui rend si iOS
+           * l'a pris quand même — dans le geste, le seul moment où iOS accepte de
+           * garder le clavier.
+           */
           <Button
             label="Envoyer"
             variant="primary"
             isIconOnly
             icon={IconeEnvoyer}
             isDisabled={texte.trim() === ""}
-            onClick={() => envoyer(texte)}
+            onMouseDown={garderClavier ? (evenement) => evenement.preventDefault() : undefined}
+            onClick={() => {
+              envoyer(texte);
+              if (garderClavier) {
+                champ.current
+                  ?.querySelector<HTMLElement>("textarea, input, [contenteditable]")
+                  ?.focus();
+              }
+            }}
           />
         )}
       </div>

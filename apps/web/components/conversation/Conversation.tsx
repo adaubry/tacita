@@ -61,7 +61,7 @@ import { routeAppel, routeInfos } from "../../lib/routes";
 import { TranscodageIndisponible } from "../../lib/media-env";
 import { brancherModeMasque } from "../../lib/mode-masque";
 import { effacerNotifications } from "../../lib/push";
-import { lireFondEcran } from "../../lib/preferences";
+import { lireFondEcran, lireGarderClavier } from "../../lib/preferences";
 import { BandeauAppel } from "../appels/BandeauAppel";
 import { LayoutHeader } from "../foundation/LayoutHeader";
 import { IconeAppel, IconeCamera, IconeInfo, IconeVideo } from "../foundation/icons";
@@ -165,6 +165,13 @@ export function Conversation({ roomId }: { roomId: string }) {
       setFondEcran(undefined);
     };
   }, [roomId]);
+
+  const [garderClavier, setGarderClavier] = useState(false);
+  useEffect(() => {
+    void lireGarderClavier(globalThis.indexedDB)
+      .then(setGarderClavier)
+      .catch(() => {});
+  }, []);
 
   // Ouvrir une conversation efface ses notifications et remet le badge au compte. Aussi au
   // retour au premier plan : sur iOS on déverrouille souvent sur une conversation déjà
@@ -604,6 +611,21 @@ export function Conversation({ roomId }: { roomId: string }) {
         {/* « appel en cours — rejoindre », dans le salon concerné. */}
         <BandeauAppel roomId={roomId} />
 
+        {/*
+         * **Un tap bref sur la conversation range le clavier.** iOS ne le fait pas : un
+         * champ garde le focus tant qu'on ne touche pas un autre champ. Un clic ne suit
+         * jamais un défilement, donc faire défiler la conversation le laisse ouvert.
+         * `display: contents` : l'enveloppe n'existe pas pour la mise en page.
+         */}
+        <div
+          style={{ display: "contents" }}
+          onClick={() => {
+            const actif = document.activeElement;
+            if (actif instanceof HTMLElement && actif.matches("textarea, input, [contenteditable]")) {
+              actif.blur();
+            }
+          }}
+        >
         <Timeline
           messages={messages}
           appels={appels}
@@ -652,6 +674,7 @@ export function Conversation({ roomId }: { roomId: string }) {
             if (rang >= 0) setViewer(rang);
           }}
         />
+        </div>
 
         <Composer
           // Remonter le composer sur changement d'intention est ce qui remplit le champ
@@ -692,6 +715,7 @@ export function Conversation({ roomId }: { roomId: string }) {
           // compression, chiffrement et mise en file y sont déjà écrits, et un vocal n'a
           // aucune raison d'avoir les siens.
           vocal={<EnregistreurVocal onEnvoyer={(fichier) => void joindre([fichier])} />}
+          garderClavier={garderClavier}
         />
       </div>
 

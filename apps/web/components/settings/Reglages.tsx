@@ -14,7 +14,7 @@ import {
   type RoomNotificationLevel,
 } from "@tacita/messaging";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useModeTheme } from "../../app/providers";
 import { ButtonsList } from "../foundation/ButtonsList";
@@ -22,7 +22,7 @@ import { IconeMuet } from "../foundation/icons";
 import { OptionCard } from "../foundation/OptionCard";
 import { Placeholder } from "../foundation/Placeholder";
 import { Sheet } from "../foundation/Sheet";
-import { Divider, RadioList, RadioListItem, Text, type ThemeMode } from "../foundation/primitives";
+import { Divider, RadioList, RadioListItem, Switch, Text, type ThemeMode } from "../foundation/primitives";
 import { useSession } from "../onboarding/SessionProvider";
 import { Appareils } from "./Appareils";
 import { Confidentialite } from "./Confidentialite";
@@ -32,6 +32,7 @@ import { NotificationsPush } from "./NotificationsPush";
 import { libelleNiveau } from "./NotificationsSalon";
 import { StockageLocal } from "./StockageLocal";
 import { routeInfos } from "../../lib/routes";
+import { ecrireGarderClavier, lireGarderClavier } from "../../lib/preferences";
 
 /**
  * Les options de. Chacune ouvre une modal, aucune ne navigue.
@@ -43,6 +44,7 @@ import { routeInfos } from "../../lib/routes";
  */
 type Option =
   | "theme"
+  | "ecriture"
   | "motdepasse"
   | "appareils"
   | "confidentialite"
@@ -52,6 +54,7 @@ type Option =
 
 const TITRES: Record<Option, string> = {
   theme: "Apparence",
+  ecriture: "Écriture",
   motdepasse: "Mot de passe",
   appareils: "Appareils",
   confidentialite: "Confidentialité",
@@ -65,6 +68,7 @@ const TITRES: Record<Option, string> = {
  * `theme` n'y est pas : son état courant est le mode choisi, et il se lit à l'exécution.
  */
 const DETAILS: Record<Exclude<Option, "theme">, string> = {
+  ecriture: "Le clavier après l'envoi",
   // D-12 — le détail dit ce qui garde le changement, parce que c'est la surprise : on
   // s'attend à devoir donner son mot de passe actuel, et c'est la clé qu'on demande.
   motdepasse: "Changer, avec votre clé de récupération",
@@ -173,6 +177,8 @@ export function Reglages() {
           </div>
         )}
 
+        {option === "ecriture" && <Ecriture />}
+
         {/* D-12 — la session est requise : sans elle il n'y a ni compte ni clé à
             vérifier, et l'écran n'aurait rien à changer. */}
         {option === "motdepasse" && session && <MotDePasse session={session} />}
@@ -224,5 +230,39 @@ export function Reglages() {
         {option === "limites" && <LimitesConnues />}
       </Sheet>
     </>
+  );
+}
+
+/**
+ * Garder le clavier après l'envoi. Bascule optimiste, comme le mode masqué : l'état suit
+ * le doigt, l'écriture IndexedDB suit derrière.
+ */
+function Ecriture() {
+  const [garder, setGarder] = useState(false);
+
+  useEffect(() => {
+    let annule = false;
+    void lireGarderClavier(globalThis.indexedDB)
+      .then((valeur) => {
+        if (!annule) setGarder(valeur);
+      })
+      .catch(() => {});
+    return () => {
+      annule = true;
+    };
+  }, []);
+
+  return (
+    <div style={{ padding: "var(--spacing-3)" }}>
+      <Switch
+        label="Garder le clavier après l'envoi"
+        description="Il reste ouvert pour le message suivant. Un toucher bref sur la conversation le range."
+        value={garder}
+        onChange={(valeur) => {
+          setGarder(valeur);
+          void ecrireGarderClavier(globalThis.indexedDB, valeur).catch(() => {});
+        }}
+      />
+    </div>
   );
 }
