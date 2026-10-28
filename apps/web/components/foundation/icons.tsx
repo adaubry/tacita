@@ -227,6 +227,15 @@ export const IconeFermer: ReactNode = (
   </svg>
 );
 
+/** Écrire sur une photo : le « T » des outils de texte. */
+export const IconeTexte: ReactNode = (
+  <svg {...trait}>
+    <path d="M5 7V5h14v2" />
+    <path d="M12 5v14" />
+    <path d="M9 19h6" />
+  </svg>
+);
+
 /** Passer de la caméra arrière à la caméra avant : deux flèches qui tournent l'une vers l'autre. */
 export const IconeRetournerCamera: ReactNode = (
   <svg {...trait}>

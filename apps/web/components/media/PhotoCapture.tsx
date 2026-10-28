@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 
-import { IconeFermer, IconeRetour, IconeRetournerCamera } from "../foundation/icons";
+import { IconeFermer, IconeRetour, IconeRetournerCamera, IconeTexte } from "../foundation/icons";
 import { Button, Text } from "../foundation/primitives";
 
 /**
@@ -51,6 +51,101 @@ const BARRE_BAS: CSSProperties = {
   // Un dégradé plutôt qu'un bandeau : les boutons restent lisibles sur une photo claire
   // sans couper l'image d'un trait.
   background: "linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent)",
+};
+
+/**
+ * **Le texte posé sur la photo**, et ses mesures. Les mêmes valeurs servent à l'écran et
+ * à l'incrustation dans l'image : la police surtout, écrite ici plutôt que lue dans
+ * `--font-family-body` — un canvas ne lit pas les variables CSS, et deux polices
+ * différentes ne couperaient pas les lignes aux mêmes endroits.
+ */
+const POLICE = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif';
+const TAILLE_TEXTE = 28;
+const INTERLIGNE = 1.25;
+/** Le texte ne s'étend pas au-delà de cette part de la largeur de l'écran. */
+const LARGEUR_TEXTE = 0.8;
+const OMBRE_TEXTE = "rgba(0, 0, 0, 0.5)";
+
+/** Position en fractions de l'écran, centre du texte : elle vaut pour n'importe quelle taille. */
+interface TexteSurPhoto {
+  valeur: string;
+  x: number;
+  y: number;
+}
+
+/** Les lignes telles que le navigateur les couperait : aux sauts de ligne, puis aux mots. */
+function couper(contexte: CanvasRenderingContext2D, texte: string, largeurMax: number): string[] {
+  const lignes: string[] = [];
+  for (const paragraphe of texte.split("\n")) {
+    let ligne = "";
+    for (const mot of paragraphe.split(" ")) {
+      const essai = ligne ? `${ligne} ${mot}` : mot;
+      if (ligne && contexte.measureText(essai).width > largeurMax) {
+        lignes.push(ligne);
+        ligne = mot;
+      } else {
+        ligne = essai;
+      }
+    }
+    lignes.push(ligne);
+  }
+  return lignes;
+}
+
+/**
+ * **Le texte entre dans l'image**, là où on l'a vu. La photo est affichée en
+ * `object-fit: cover` : chaque point de l'écran se ramène à un pixel de l'image par la
+ * même échelle, et la taille du texte avec lui.
+ *
+ * ponytail: un seul texte, blanc, une taille. Plusieurs textes, des couleurs et le
+ * pincement pour agrandir le jour où on les demande.
+ */
+async function incruster(
+  photo: Blob,
+  texte: TexteSurPhoto,
+  ecran: { largeur: number; hauteur: number },
+): Promise<Blob> {
+  const image = await createImageBitmap(photo);
+  const canvas = document.createElement("canvas");
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const contexte = canvas.getContext("2d");
+  if (!contexte) return photo;
+  contexte.drawImage(image, 0, 0);
+
+  const echelle = Math.max(ecran.largeur / image.width, ecran.hauteur / image.height);
+  const decalageX = (ecran.largeur - image.width * echelle) / 2;
+  const decalageY = (ecran.hauteur - image.height * echelle) / 2;
+  const centreX = (texte.x * ecran.largeur - decalageX) / echelle;
+  const centreY = (texte.y * ecran.hauteur - decalageY) / echelle;
+  const taille = TAILLE_TEXTE / echelle;
+
+  contexte.font = `700 ${taille}px ${POLICE}`;
+  contexte.textAlign = "center";
+  contexte.textBaseline = "middle";
+  contexte.fillStyle = "white";
+  contexte.shadowColor = OMBRE_TEXTE;
+  contexte.shadowBlur = 8 / echelle;
+
+  const lignes = couper(contexte, texte.valeur, (LARGEUR_TEXTE * ecran.largeur) / echelle);
+  const hauteurLigne = taille * INTERLIGNE;
+  lignes.forEach((ligne, rang) =>
+    contexte.fillText(ligne, centreX, centreY + (rang - (lignes.length - 1) / 2) * hauteurLigne),
+  );
+
+  return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob ?? photo), "image/jpeg", 1));
+}
+
+const STYLE_TEXTE: CSSProperties = {
+  fontFamily: POLICE,
+  fontWeight: 700,
+  fontSize: TAILLE_TEXTE,
+  lineHeight: INTERLIGNE,
+  textAlign: "center",
+  color: "white",
+  textShadow: `0 0 8px ${OMBRE_TEXTE}`,
+  whiteSpace: "pre-wrap",
+  overflowWrap: "break-word",
 };
 
 interface PhotoCaptureProps {
@@ -103,6 +198,12 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
   const [refus, setRefus] = useState<keyof typeof REFUS>();
   const [prise, setPrise] = useState<{ blob: Blob; url: string; nom: string }>();
   const [face, setFace] = useState<Face>("environment");
+  const [texte, setTexte] = useState<TexteSurPhoto | null>(null);
+  /** La saisie en cours ; `null` hors saisie. */
+  const [saisie, setSaisie] = useState<string | null>(null);
+  const glisse = useRef<{ x: number; y: number; depuisX: number; depuisY: number; bouge: boolean } | null>(
+    null,
+  );
 
   useEffect(() => {
     const element = boite.current;
@@ -119,6 +220,8 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
       setPrise(undefined);
       setRefus(undefined);
       setFace("environment");
+      setTexte(null);
+      setSaisie(null);
       return;
     }
 
@@ -173,6 +276,61 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
 
   // Le selfie se voit en miroir, comme dans un miroir — et se prend comme il se voit.
   const miroir = face === "user";
+
+  /** Ce qui part et ce qui s'enregistre : la prise, texte incrusté s'il y en a un. */
+  const photoFinale = async (blob: Blob) => {
+    const element = boite.current;
+    if (!texte || !element) return blob;
+    // Une incrustation qui échoue rend la photo sans texte plutôt que rien du tout.
+    return incruster(blob, texte, { largeur: element.clientWidth, hauteur: element.clientHeight }).catch(
+      () => blob,
+    );
+  };
+
+  const validerSaisie = () => {
+    const valeur = (saisie ?? "").trim();
+    setTexte(valeur ? { x: 0.5, y: 0.4, ...texte, valeur } : null);
+    setSaisie(null);
+  };
+
+  /*
+   * **Le texte se déplace au doigt**, et un toucher bref le rouvre en saisie. La position
+   * est en fractions de l'écran : c'est elle que l'incrustation relit.
+   */
+  const gestesTexte = {
+    onPointerDown(evenement: PointerEvent<HTMLDivElement>) {
+      if (!texte) return;
+      evenement.currentTarget.setPointerCapture?.(evenement.pointerId);
+      glisse.current = {
+        x: evenement.clientX,
+        y: evenement.clientY,
+        depuisX: texte.x,
+        depuisY: texte.y,
+        bouge: false,
+      };
+    },
+    onPointerMove(evenement: PointerEvent<HTMLDivElement>) {
+      const depart = glisse.current;
+      const element = boite.current;
+      if (!depart || !texte || !element?.clientWidth || !element.clientHeight) return;
+      const ecartX = evenement.clientX - depart.x;
+      const ecartY = evenement.clientY - depart.y;
+      if (!depart.bouge && Math.hypot(ecartX, ecartY) < 4) return;
+      depart.bouge = true;
+      // Jamais tout à fait au bord : un texte qu'on ne peut plus attraper ne se rattrape pas.
+      const borner = (valeur: number) => Math.min(Math.max(valeur, 0.05), 0.95);
+      setTexte({
+        ...texte,
+        x: borner(depart.depuisX + ecartX / element.clientWidth),
+        y: borner(depart.depuisY + ecartY / element.clientHeight),
+      });
+    },
+    onPointerUp() {
+      const depart = glisse.current;
+      glisse.current = null;
+      if (depart && !depart.bouge && texte) setSaisie(texte.valeur);
+    },
+  };
 
   const capturer = async () => {
     const element = video.current;
@@ -235,7 +393,55 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
               <Text type="body">{REFUS[refus]}</Text>
             </div>
           ) : prise ? (
-            <img src={prise.url} alt="Photo prise" style={PLEIN_ECRAN} />
+            <>
+              <img src={prise.url} alt="Photo prise" style={PLEIN_ECRAN} />
+              {texte && saisie === null && (
+                <div
+                  aria-label={`Texte sur la photo : ${texte.valeur}`}
+                  {...gestesTexte}
+                  style={{
+                    ...STYLE_TEXTE,
+                    position: "absolute",
+                    left: `${texte.x * 100}%`,
+                    top: `${texte.y * 100}%`,
+                    transform: "translate(-50%, -50%)",
+                    maxWidth: `${LARGEUR_TEXTE * 100}%`,
+                    touchAction: "none",
+                    cursor: "grab",
+                  }}
+                >
+                  {texte.valeur}
+                </div>
+              )}
+              {saisie !== null && (
+                // La saisie : l'image se voile, le champ prend le centre — et le clavier.
+                <div
+                  style={{
+                    ...PLEIN_ECRAN,
+                    display: "grid",
+                    placeItems: "center",
+                    background: "rgba(0, 0, 0, 0.4)",
+                  }}
+                >
+                  <textarea
+                    aria-label="Texte à poser sur la photo"
+                    autoFocus
+                    rows={3}
+                    value={saisie}
+                    onChange={(evenement) => setSaisie(evenement.target.value)}
+                    style={{
+                      ...STYLE_TEXTE,
+                      width: `${LARGEUR_TEXTE * 100}%`,
+                      background: "transparent",
+                      border: 0,
+                      outline: "none",
+                      resize: "none",
+                      caretColor: "white",
+                    }}
+                  />
+                </div>
+              )}
+            </>
           ) : (
             /*
              * Flux de la caméra : aucune piste de sous-titres à fournir, et l'aperçu est
@@ -261,7 +467,11 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
                 isIconOnly
                 icon={IconeRetour}
                 className="tacita-retour"
-                onClick={() => setPrise(undefined)}
+                isDisabled={saisie !== null}
+                onClick={() => {
+                  setPrise(undefined);
+                  setTexte(null);
+                }}
               />
             ) : (
               <Button
@@ -273,6 +483,17 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
                 onClick={onFermer}
               />
             )}
+            {prise && saisie === null && (
+              <Button
+                label={texte ? "Modifier le texte" : "Ajouter du texte"}
+                variant="ghost"
+                isIconOnly
+                icon={IconeTexte}
+                className="tacita-retour"
+                onClick={() => setSaisie(texte?.valeur ?? "")}
+              />
+            )}
+            {saisie !== null && <Button label="Terminé" variant="primary" onClick={validerSaisie} />}
             {!prise && !refus && (
               <Button
                 label={face === "environment" ? "Passer à la caméra avant" : "Passer à la caméra arrière"}
@@ -285,7 +506,7 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
             )}
           </div>
 
-          {!refus && (
+          {!refus && saisie === null && (
             <div style={BARRE_BAS}>
               {prise ? (
                 <>
@@ -297,16 +518,18 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
                     label="Envoyer (version compressée)"
                     variant="primary"
                     width="100%"
-                    onClick={() => {
-                      onEnvoyer(new File([prise.blob], prise.nom, { type: "image/jpeg" }));
-                      onFermer();
-                    }}
+                    onClick={() =>
+                      void photoFinale(prise.blob).then((photo) => {
+                        onEnvoyer(new File([photo], prise.nom, { type: "image/jpeg" }));
+                        onFermer();
+                      })
+                    }
                   />
                   <Button
                     label="Enregistrer sur votre appareil (original)"
                     variant="secondary"
                     width="100%"
-                    onClick={() => void onEnregistrer(prise.blob, prise.nom)}
+                    onClick={() => void photoFinale(prise.blob).then((photo) => onEnregistrer(photo, prise.nom))}
                   />
                 </>
               ) : (

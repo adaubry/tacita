@@ -467,7 +467,7 @@ describe("capture : « sur votre appareil » et « envoyé » ne se confondent p
     await prendre();
 
     fireEvent.click(screen.getByRole("button", { name: /Enregistrer sur votre appareil/ }));
-    expect(onEnregistrer).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onEnregistrer).toHaveBeenCalledTimes(1));
     expect(onEnvoyer).not.toHaveBeenCalled();
   });
 
@@ -512,6 +512,7 @@ describe("capture : « sur votre appareil » et « envoyé » ne se confondent p
 
     // Le nom était recalculé à chaque rendu depuis l'horloge : une seconde entre les deux
     // clics suffisait à donner deux noms à une seule photo.
+    await waitFor(() => expect(onEnvoyer).toHaveBeenCalled());
     expect(onEnregistrer.mock.calls[0]![1]).toBe(onEnvoyer.mock.calls[0]![0].name);
   });
 
@@ -556,6 +557,93 @@ describe("capture : « sur votre appareil » et « envoyé » ne se confondent p
     render(<PhotoCapture ouvert onFermer={onFermer} onEnregistrer={vi.fn()} onEnvoyer={vi.fn()} />);
     fireEvent(screen.getByRole("dialog", { name: "Prendre une photo", hidden: true }), new Event("cancel", { cancelable: true }));
     expect(onFermer).toHaveBeenCalledOnce();
+  });
+
+  describe("texte sur la photo", () => {
+    /** Le dialogue mesure 500 × 1000 à l'écran : jsdom ne met rien en page. */
+    const mesurer = () => {
+      const boite = screen.getByRole("dialog", { name: "Prendre une photo", hidden: true });
+      Object.defineProperty(boite, "clientWidth", { configurable: true, value: 500 });
+      Object.defineProperty(boite, "clientHeight", { configurable: true, value: 1000 });
+    };
+    const ecrire = async (valeur: string) => {
+      fireEvent.change(await screen.findByLabelText("Texte à poser sur la photo"), {
+        target: { value: valeur },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Terminé" }));
+    };
+    const pointeur = (cible: HTMLElement, type: string, clientX: number, clientY: number) =>
+      fireEvent(cible, new MouseEvent(type, { bubbles: true, clientX, clientY }));
+
+    it("le texte saisi se pose sur la photo, et se rouvre d'un toucher", async () => {
+      render(<PhotoCapture ouvert onFermer={vi.fn()} onEnregistrer={vi.fn()} onEnvoyer={vi.fn()} />);
+      await prendre();
+
+      fireEvent.click(screen.getByRole("button", { name: "Ajouter du texte" }));
+      await ecrire("on est là");
+      const texte = screen.getByLabelText("Texte sur la photo : on est là");
+      expect(screen.getByRole("button", { name: "Modifier le texte" })).toBeTruthy();
+
+      pointeur(texte, "pointerdown", 100, 100);
+      pointeur(texte, "pointerup", 100, 100);
+      expect((await screen.findByLabelText("Texte à poser sur la photo")) as HTMLTextAreaElement).toHaveProperty(
+        "value",
+        "on est là",
+      );
+    });
+
+    it("un texte vide ne pose rien", async () => {
+      render(<PhotoCapture ouvert onFermer={vi.fn()} onEnregistrer={vi.fn()} onEnvoyer={vi.fn()} />);
+      await prendre();
+      fireEvent.click(screen.getByRole("button", { name: "Ajouter du texte" }));
+      await ecrire("   ");
+      expect(screen.queryByLabelText(/Texte sur la photo/)).toBeNull();
+    });
+
+    it("le texte se déplace au doigt, en fractions de l'écran", async () => {
+      render(<PhotoCapture ouvert onFermer={vi.fn()} onEnregistrer={vi.fn()} onEnvoyer={vi.fn()} />);
+      await prendre();
+      mesurer();
+      fireEvent.click(screen.getByRole("button", { name: "Ajouter du texte" }));
+      await ecrire("salut");
+
+      const texte = screen.getByLabelText("Texte sur la photo : salut");
+      pointeur(texte, "pointerdown", 100, 100);
+      pointeur(texte, "pointermove", 200, 100);
+      pointeur(texte, "pointerup", 200, 100);
+      // 100 px sur 500 : du centre (50 %) à 70 %.
+      expect(screen.getByLabelText("Texte sur la photo : salut").style.left).toBe("70%");
+      // Un glissement n'est pas un toucher : la saisie ne s'est pas rouverte.
+      expect(screen.queryByLabelText("Texte à poser sur la photo")).toBeNull();
+    });
+
+    it("le texte entre dans l'image envoyée, là et à la taille où on l'a vu", async () => {
+      const fillText = vi.fn();
+      HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+        drawImage: vi.fn(),
+        fillText,
+        measureText: (valeur: string) => ({ width: valeur.length * 10 }),
+      })) as never;
+      // L'image prise fait 1000 × 2000 : deux fois l'écran, dans les deux sens.
+      vi.stubGlobal("createImageBitmap", vi.fn(async () => ({ width: 1000, height: 2000 })));
+      const onEnvoyer = vi.fn();
+      render(<PhotoCapture ouvert onFermer={vi.fn()} onEnregistrer={vi.fn()} onEnvoyer={onEnvoyer} />);
+      await prendre();
+      mesurer();
+      fireEvent.click(screen.getByRole("button", { name: "Ajouter du texte" }));
+      await ecrire("salut");
+
+      fireEvent.click(screen.getByRole("button", { name: /Envoyer \(version compressée\)/ }));
+      await waitFor(() => expect(onEnvoyer).toHaveBeenCalled());
+      // Centre à (50 %, 40 %) de l'écran 500 × 1000, soit (500, 800) dans l'image.
+      expect(fillText).toHaveBeenCalledWith("salut", 500, 800);
+      const contexte = vi.mocked(HTMLCanvasElement.prototype.getContext).mock.results.at(-1)!.value as {
+        font: string;
+      };
+      // 28 px à l'écran, une échelle de 2 : 56 px dans l'image.
+      expect(contexte.font).toMatch(/^700 56px /);
+      vi.unstubAllGlobals();
+    });
   });
 
   it("sans API caméra, l'écran le dit — et ne renvoie pas vers un réglage inexistant", async () => {
