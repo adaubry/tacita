@@ -59,8 +59,13 @@ export function PushNotifications({ indexedDB }: PushNotificationsProps = {}) {
     const repondre = (evenement: MessageEvent) => {
       const donnees = evenement.data as { type?: string; roomId?: string; eventId?: string };
       if (donnees?.type !== TYPE_APERCU || !donnees.roomId) return;
-      // `null` est une réponse : le SW affiche alors « Nouveau message ».
-      evenement.ports[0]?.postMessage(apercuLocal(session, donnees.roomId, donnees.eventId));
+      // Sans aperçu, le SW affiche « Nouveau message ». `visible` répond à l'autre
+      // question : la page est-elle à l'écran ? Elle seule le sait à coup sûr — le
+      // `visibilityState` d'un client vu du service worker ne suffisait pas sur iOS.
+      evenement.ports[0]?.postMessage({
+        ...apercuLocal(session, donnees.roomId, donnees.eventId),
+        visible: document.visibilityState === "visible",
+      });
     };
 
     navigator.serviceWorker.addEventListener("message", repondre);
