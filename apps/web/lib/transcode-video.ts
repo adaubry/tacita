@@ -368,6 +368,11 @@ export async function transcoderVideo(blob: Blob, cibles: VideoTargets): Promise
    */
   const poster = ouvrirPoster(source.largeur, source.hauteur, source.rotation);
 
+  // Ce que le prédicat du chemin rapide a vu : des mesures, jamais le contenu.
+  const resumeSource = `source ${source.codec}, ${source.largeur}×${source.hauteur}, ${Math.round(
+    source.debitBps / 1000,
+  )} kbit/s, ${source.dureeMs} ms, ${source.pistes} piste(s)`;
+
   let derniereCleUs = -INTERVALLE_CLE_US;
   const decodeur = new VideoDecoder({
     output: (image) => {
@@ -413,7 +418,8 @@ export async function transcoderVideo(blob: Blob, cibles: VideoTargets): Promise
     },
     error: (cause) => {
       // Le message de WebCodecs ne cite pas le média : il dit pourquoi le décodeur a lâché.
-      erreur ??= new Error(`décodage vidéo interrompu : ${cause.name} (${cause.message})`);
+      // Le résumé de la source dit pourquoi on en est arrivé là plutôt qu'au chemin rapide.
+      erreur ??= new Error(`décodage vidéo interrompu : ${cause.name} (${cause.message}) — ${resumeSource}`);
     },
   });
   decodeur.configure(configSource);
