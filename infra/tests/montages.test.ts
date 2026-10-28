@@ -58,10 +58,36 @@ const FICHIERS = [
  * une valeur posée à une jonction que personne ne relit. Ce test la relit, et la seule
  * lecture qui vaille est le disque.
  */
+/**
+ * **Les sources produites à l'installation**, et non versionnées : elles ne peuvent pas
+ * exister dans un dépôt fraîchement cloné — c'est ce qui rendait la CI rouge. Chacune
+ * nomme ce qui la crée ; le test vérifie que ce créateur existe et que Git l'ignore bien,
+ * pour qu'une exemption ne devienne jamais une faute de frappe tolérée.
+ */
+const PRODUITES_A_L_INSTALLATION: Record<string, string> = {
+  "./proxy/certs": "proxy/generate-dev-certs.sh",
+};
+
 describe("tout montage lié désigne un chemin qui existe, résolu depuis infra/", () => {
+  it("chaque source produite à l'installation a son générateur, et Git l'ignore", () => {
+    for (const [source, generateur] of Object.entries(PRODUITES_A_L_INSTALLATION)) {
+      expect(existsSync(new URL(generateur, INFRA)), generateur).toBe(true);
+      expect(readFileSync(new URL("../.gitignore", INFRA), "utf8")).toContain(
+        `infra/${source.replace(/^\.\//, "")}/`,
+      );
+    }
+  });
+
   for (const fichier of FICHIERS) {
     it(`${fichier} : chaque source existe`, () => {
-      const manquants = montagesLies(fichier).filter(({ resolu }) => !existsSync(resolu));
+      // Le dossier produit, et ce qu'il contient (`./proxy/certs/fullchain.pem`).
+      const produite = (source: string) =>
+        Object.keys(PRODUITES_A_L_INSTALLATION).some(
+          (dossier) => source === dossier || source.startsWith(`${dossier}/`),
+        );
+      const manquants = montagesLies(fichier).filter(
+        ({ source, resolu }) => !produite(source) && !existsSync(resolu),
+      );
       // Le message porte le service et les deux chemins : une source fausse ne se devine
       // pas à la lecture, c'est tout le problème.
       expect(manquants.map((m) => `${m.service} → ${m.source} (${m.resolu})`)).toEqual([]);
