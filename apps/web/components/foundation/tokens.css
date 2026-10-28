@@ -232,6 +232,26 @@
   transform: scale(0.92);
 }
 
+/* Maintenu, le déclencheur ne doit rien déclencher d'autre : ni menu de lien, ni loupe,
+   ni sélection — le geste appartient au film. */
+.tacita-declencheur {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* En train de filmer : le disque rougit et rétrécit, l'anneau reste — le signe que tout
+   le monde lit comme « ça enregistre ». La progression est le cercle peint autour. */
+.tacita-declencheur-film {
+  padding: 16px;
+  background-color: var(--color-error);
+  transform: scale(1.1);
+}
+
+.tacita-declencheur-film:active {
+  transform: scale(1.1);
+}
+
 /* Avant que le flux n'arrive : visible, mais visiblement pas prêt. */
 .tacita-declencheur:disabled {
   opacity: 0.4;

@@ -66,6 +66,30 @@ const INTERLIGNE = 1.25;
 const LARGEUR_TEXTE = 0.8;
 const OMBRE_TEXTE = "rgba(0, 0, 0, 0.5)";
 
+/** Tenu au-delà, le déclencheur filme au lieu de photographier. */
+const DELAI_MAINTIEN_MS = 250;
+/** Au-delà, l'enregistrement s'arrête de lui-même. */
+export const DUREE_MAX_FILM_MS = 60_000;
+/** Le cercle de progression autour du déclencheur. */
+const RAYON_PROGRESSION = 44;
+const TOUR_PROGRESSION = 2 * Math.PI * RAYON_PROGRESSION;
+
+/**
+ * Le format d'enregistrement, **ou rien** : un MP4 que la chaîne d'envoi sait relire. Le
+ * WebM de Chrome ou de Firefox n'y entre pas — pas de maintien pour filmer, alors.
+ */
+function formatVideo(): string | undefined {
+  if (typeof MediaRecorder === "undefined") return undefined;
+  return ['video/mp4;codecs="avc1,mp4a.40.2"', "video/mp4"].find((format) =>
+    MediaRecorder.isTypeSupported(format),
+  );
+}
+
+const dureeFilm = (ms: number) => {
+  const secondes = Math.floor(ms / 1000);
+  return `${Math.floor(secondes / 60)}:${String(secondes % 60).padStart(2, "0")}`;
+};
+
 /** Position en fractions de l'écran, centre du texte : elle vaut pour n'importe quelle taille. */
 interface TexteSurPhoto {
   valeur: string;
@@ -186,17 +210,29 @@ function cadrageVisible(element: HTMLVideoElement) {
  * **La permission est demandée au moment de l'usage**, jamais à l'avance (DESIGN.md), et
  * un refus est expliqué et rattrapable : il n'y a pas d'écran mort.
  *
- * ponytail: photo seulement, pas de vidéo. La capture vidéo produirait du WebM ou du
- * MP4/AAC selon l'appareil, qu'il faudrait transcoder pour envoyer — et
- * ce transcodage n'existe pas dans le shard (ESCALATIONS § E-10). Le bouton n'existe donc
- * pas non plus.
+ * **Toucher prend une photo, maintenir filme** — le geste de Snapchat et d'Instagram.
+ * La vidéo est enregistrée en MP4 (H.264 + AAC), ce que produit Safari : c'est le format
+ * que la chaîne d'envoi sait réduire **en gardant le son**. Là où le navigateur
+ * n'enregistre qu'en WebM, que la chaîne ne lit pas, le maintien ne filme pas : mieux
+ * vaut une fonction absente qu'une vidéo muette ou cassée chez le correspondant.
+ *
+ * ponytail: un selfie filmé n'est pas mis en miroir comme la photo — il faudrait
+ * repeindre chaque image dans un canvas. À faire si on le remarque.
  */
 export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: PhotoCaptureProps) {
   const boite = useRef<HTMLDialogElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const [flux, setFlux] = useState<MediaStream>();
   const [refus, setRefus] = useState<keyof typeof REFUS>();
-  const [prise, setPrise] = useState<{ blob: Blob; url: string; nom: string }>();
+  const [prise, setPrise] = useState<{ blob: Blob; url: string; nom: string; video: boolean }>();
+  /** L'enregistrement en cours : son départ, et le temps écoulé pour le cercle. */
+  const [film, setFilm] = useState<{ ecoule: number } | null>(null);
+  const enregistreur = useRef<MediaRecorder | null>(null);
+  /** Le doigt est-il encore sur le déclencheur ? La permission du micro peut le voir partir. */
+  const doigtPose = useRef(false);
+  const minuteurMaintien = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Un film vient de finir au relâcher : le clic qui suit n'est pas une photo. */
+  const filmVientDeFinir = useRef(false);
   const [face, setFace] = useState<Face>("environment");
   const [texte, setTexte] = useState<TexteSurPhoto | null>(null);
   /** La saisie en cours ; `null` hors saisie. */
@@ -222,6 +258,14 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
       setFace("environment");
       setTexte(null);
       setSaisie(null);
+      // Un film en cours s'arrête avec l'écran, et ne devient pas une prise.
+      if (enregistreur.current) {
+        enregistreur.current.ondataavailable = null;
+        enregistreur.current.onstop = null;
+        if (enregistreur.current.state !== "inactive") enregistreur.current.stop();
+        enregistreur.current = null;
+      }
+      setFilm(null);
       return;
     }
 
@@ -332,6 +376,83 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
     },
   };
 
+  /*
+   * **Filmer.** Le micro n'est demandé qu'ici, au premier maintien, jamais à l'ouverture
+   * de la caméra : qui ne fait que des photos n'a pas à l'accorder (DESIGN.md, permission
+   * au moment de l'usage). Refusé, le film part sans son — c'est un choix de celui qui
+   * filme, pas une panne à lui cacher.
+   */
+  const filmer = async () => {
+    const format = formatVideo();
+    if (!flux || !format) return;
+    const micro = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => undefined);
+    // Relâché pendant la demande de permission : il n'y a plus rien à filmer.
+    if (!doigtPose.current) {
+      micro?.getTracks().forEach((piste) => piste.stop());
+      return;
+    }
+
+    const pistes = new MediaStream([...flux.getVideoTracks(), ...(micro?.getAudioTracks() ?? [])]);
+    const recorder = new MediaRecorder(pistes, { mimeType: format });
+    const morceaux: Blob[] = [];
+    const debut = Date.now();
+    recorder.ondataavailable = (evenement) => {
+      if (evenement.data.size > 0) morceaux.push(evenement.data);
+    };
+    recorder.onstop = () => {
+      micro?.getTracks().forEach((piste) => piste.stop());
+      enregistreur.current = null;
+      setFilm(null);
+      // Le type seul, sans `;codecs=…` : c'est lui que la chaîne d'envoi et les
+      // correspondants comparent, et l'enregistreur rend le format complet.
+      const blob = new Blob(morceaux, { type: (recorder.mimeType || "video/mp4").split(";")[0] });
+      if (blob.size === 0) return;
+      const nom = `video-${new Date(debut).toISOString().slice(0, 19).replaceAll(":", "-")}.mp4`;
+      setPrise({ blob, url: URL.createObjectURL(blob), nom, video: true });
+    };
+    enregistreur.current = recorder;
+    recorder.start();
+    setFilm({ ecoule: 0 });
+
+    // Le cercle avance, et l'enregistrement s'arrête seul au bout d'une minute.
+    const pas = setInterval(() => {
+      const ecoule = Date.now() - debut;
+      if (enregistreur.current !== recorder) return clearInterval(pas);
+      if (ecoule >= DUREE_MAX_FILM_MS) {
+        clearInterval(pas);
+        filmVientDeFinir.current = doigtPose.current;
+        recorder.stop();
+        return;
+      }
+      setFilm({ ecoule });
+    }, 100);
+  };
+
+  /*
+   * **Le déclencheur : toucher photographie, maintenir filme.** Le clic reste le chemin
+   * de la photo — c'est aussi celui du clavier. Le maintien arme un délai ; s'il s'écoule
+   * doigt posé, on filme, et le relâcher arrête. Le clic qui suit un film est avalé.
+   */
+  const gestesDeclencheur = {
+    onPointerDown(evenement: PointerEvent<HTMLButtonElement>) {
+      doigtPose.current = true;
+      if (!formatVideo()) return;
+      // Le doigt qui glisse hors du déclencheur pendant le film le relâche quand même ici :
+      // sans capture, le relâcher partait ailleurs et le film courait jusqu'à la minute.
+      evenement.currentTarget.setPointerCapture?.(evenement.pointerId);
+      minuteurMaintien.current = setTimeout(() => void filmer(), DELAI_MAINTIEN_MS);
+    },
+    onPointerUp() {
+      doigtPose.current = false;
+      if (minuteurMaintien.current) clearTimeout(minuteurMaintien.current);
+      minuteurMaintien.current = null;
+      if (enregistreur.current && enregistreur.current.state !== "inactive") {
+        filmVientDeFinir.current = true;
+        enregistreur.current.stop();
+      }
+    },
+  };
+
   const capturer = async () => {
     const element = video.current;
     if (!element) return;
@@ -351,7 +472,7 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
     // enregistrée sur l'appareil et celle envoyée au correspondant — la même photo —
     // sortaient sous deux noms différents dès qu'une seconde séparait les deux clics.
     const nom = `photo-${new Date().toISOString().slice(0, 19).replaceAll(":", "-")}.jpg`;
-    if (blob) setPrise({ blob, url: URL.createObjectURL(blob), nom });
+    if (blob) setPrise({ blob, url: URL.createObjectURL(blob), nom, video: false });
   };
 
   return (
@@ -394,7 +515,29 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
             </div>
           ) : prise ? (
             <>
-              <img src={prise.url} alt="Photo prise" style={PLEIN_ECRAN} />
+              {prise.video ? (
+                <video
+                  src={prise.url}
+                  autoPlay
+                  loop
+                  playsInline
+                  aria-label="Vidéo filmée"
+                  style={PLEIN_ECRAN}
+                  // Le son d'abord : c'est ce qu'on vient de dire qu'on revoit. Hors d'un
+                  // geste, le navigateur peut refuser de jouer un son — muette, alors,
+                  // plutôt qu'une image figée.
+                  ref={(element) => {
+                    if (!element || !element.paused) return;
+                    element.muted = false;
+                    void element.play()?.catch(() => {
+                      element.muted = true;
+                      void element.play()?.catch(() => {});
+                    });
+                  }}
+                />
+              ) : (
+                <img src={prise.url} alt="Photo prise" style={PLEIN_ECRAN} />
+              )}
               {texte && saisie === null && (
                 <div
                   aria-label={`Texte sur la photo : ${texte.valeur}`}
@@ -483,7 +626,7 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
                 onClick={onFermer}
               />
             )}
-            {prise && saisie === null && (
+            {prise && !prise.video && saisie === null && (
               <Button
                 label={texte ? "Modifier le texte" : "Ajouter du texte"}
                 variant="ghost"
@@ -494,7 +637,7 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
               />
             )}
             {saisie !== null && <Button label="Terminé" variant="primary" onClick={validerSaisie} />}
-            {!prise && !refus && (
+            {!prise && !refus && !film && (
               <Button
                 label={face === "environment" ? "Passer à la caméra avant" : "Passer à la caméra arrière"}
                 variant="ghost"
@@ -519,8 +662,10 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
                     variant="primary"
                     width="100%"
                     onClick={() =>
-                      void photoFinale(prise.blob).then((photo) => {
-                        onEnvoyer(new File([photo], prise.nom, { type: "image/jpeg" }));
+                      void photoFinale(prise.blob).then((media) => {
+                        onEnvoyer(
+                          new File([media], prise.nom, { type: prise.video ? prise.blob.type : "image/jpeg" }),
+                        );
                         onFermer();
                       })
                     }
@@ -539,13 +684,53 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
                  * cette forme — et il n'a rien à hériter de la règle des primaires : il n'est
                  * pas un bouton parmi d'autres, il est l'écran.
                  */
-                <button
-                  type="button"
-                  aria-label="Prendre la photo"
-                  disabled={!flux}
-                  onClick={() => void capturer()}
-                  className="tacita-declencheur"
-                />
+                <>
+                  {film && (
+                    <Text type="label" hasTabularNumbers>
+                      {dureeFilm(film.ecoule)}
+                    </Text>
+                  )}
+                  <div style={{ display: "grid", placeItems: "center" }}>
+                    <button
+                      type="button"
+                      aria-label="Prendre la photo"
+                      aria-description={formatVideo() ? "Maintenir pour filmer" : undefined}
+                      disabled={!flux}
+                      {...gestesDeclencheur}
+                      onPointerCancel={gestesDeclencheur.onPointerUp}
+                      onClick={() => {
+                        if (filmVientDeFinir.current) {
+                          filmVientDeFinir.current = false;
+                          return;
+                        }
+                        void capturer();
+                      }}
+                      className={film ? "tacita-declencheur tacita-declencheur-film" : "tacita-declencheur"}
+                      style={{ gridArea: "1 / 1" }}
+                    />
+                    {/* Le temps qui reste, en cercle autour du déclencheur. */}
+                    {film && (
+                      <svg
+                        aria-hidden
+                        width={2 * RAYON_PROGRESSION + 8}
+                        height={2 * RAYON_PROGRESSION + 8}
+                        style={{ gridArea: "1 / 1", pointerEvents: "none", transform: "rotate(-90deg)" }}
+                      >
+                        <circle
+                          cx={RAYON_PROGRESSION + 4}
+                          cy={RAYON_PROGRESSION + 4}
+                          r={RAYON_PROGRESSION}
+                          fill="none"
+                          stroke="var(--color-error)"
+                          strokeWidth={4}
+                          strokeLinecap="round"
+                          strokeDasharray={TOUR_PROGRESSION}
+                          strokeDashoffset={TOUR_PROGRESSION * (1 - film.ecoule / DUREE_MAX_FILM_MS)}
+                        />
+                      </svg>
+                    )}
+                  </div>
+                </>
               )}
             </div>
           )}
