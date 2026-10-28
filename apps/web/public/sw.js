@@ -289,19 +289,40 @@ self.addEventListener("push", (event) => {
   }
 
   event.waitUntil(
-    demanderApercu(roomId, charge.event_id)
-      .catch(() => null)
-      .then((apercu) =>
+    Promise.all([demanderApercu(roomId, charge.event_id).catch(() => null), appliAuPremierPlan()])
+      .then(([apercu, premierPlan]) => {
         // clés absentes, événement pas encore synchronisé, aucune fenêtre
         // ouverte : notification **générique**, sans contenu et sans erreur bruyante.
-        self.registration.showNotification(
-          apercu ? apercu.expediteur : titreDeRepli(charge),
-          optionsNotification(roomId, charge.event_id, apercu),
-        ),
-      )
+        const titre = apercu ? apercu.expediteur : titreDeRepli(charge);
+        const options = optionsNotification(roomId, charge.event_id, apercu);
+        if (!premierPlan) return self.registration.showNotification(titre, options);
+
+        /*
+         * **L'app est à l'écran : la notification ne doit pas se voir, mais elle doit
+         * exister.** iOS exige une notification par push, sans exception pour l'app au
+         * premier plan : au troisième push muet, Safari **retire l'abonnement**, et les
+         * notifications s'arrêtent pour de bon — l'erreur exacte de Discourse
+         * (meta.discourse.org/t/290225). Une notification affichée puis refermée compte
+         * comme affichée. Silencieuse, et refermée avant d'avoir été vue.
+         *
+         * Le seul vrai saut serait côté serveur, qui ignore ce qui est à l'écran.
+         */
+        return self.registration
+          .showNotification(titre, { ...options, silent: true, renotify: false })
+          .then(() => self.registration.getNotifications({ tag: roomId }))
+          .then((affichees) => affichees.forEach((notification) => notification.close()));
+      })
       .then(majBadge),
   );
 });
+
+/** Une fenêtre de l'app est visible : l'utilisateur la regarde, il n'a rien à apprendre. */
+function appliAuPremierPlan() {
+  return self.clients
+    .matchAll({ type: "window", includeUncontrolled: true })
+    .then((fenetres) => fenetres.some((fenetre) => fenetre.visibilityState === "visible"))
+    .catch(() => false);
+}
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();

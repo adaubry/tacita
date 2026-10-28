@@ -511,7 +511,11 @@ describe("les réglages disent l'état, et portent toujours l'action", () => {
 function chargerServiceWorker() {
   const code = lire("public/sw.js");
   const handlers = new Map<string, (evenement: unknown) => void>();
-  const notifications: { titre: string; options: Record<string, unknown> }[] = [];
+  const notifications: {
+    titre: string;
+    options: Record<string, unknown>;
+    close: ReturnType<typeof vi.fn>;
+  }[] = [];
   let fenetres: unknown[] = [];
 
   const self = {
@@ -521,7 +525,7 @@ function chargerServiceWorker() {
     skipWaiting: vi.fn(),
     registration: {
       showNotification: (titre: string, options: Record<string, unknown>) => {
-        notifications.push({ titre, options });
+        notifications.push({ titre, options, close: vi.fn() });
         return Promise.resolve();
       },
       // Les notifications réellement affichées : c'est ce que le badge compte.
@@ -579,6 +583,28 @@ describe("le service worker n'écrit rien, ne journalise rien, ne devine rien", 
     expect(sw.notifications[0]!.options.body).toBe("on se voit demain ?");
     // Groupées par conversation : un salon bavard remplace, il n'empile pas.
     expect(sw.notifications[0]!.options.tag).toBe(SALON);
+  });
+
+  it("app à l'écran : la notification existe, silencieuse, et se referme aussitôt", async () => {
+    // iOS retire l'abonnement au troisième push sans notification, premier plan compris :
+    // la sauter serait couper les notifications pour de bon. On l'affiche, on la ferme.
+    const sw = chargerServiceWorker();
+    sw.fenetresOuvertes([{ ...fenetreQuiRepond(null), visibilityState: "visible" }]);
+
+    await pousser(sw, { event_id: EVENEMENT, room_id: SALON });
+
+    expect(sw.notifications).toHaveLength(1);
+    expect(sw.notifications[0]!.options.silent).toBe(true);
+    expect(sw.notifications[0]!.close).toHaveBeenCalled();
+  });
+
+  it("app en arrière-plan : la notification reste", async () => {
+    const sw = chargerServiceWorker();
+    sw.fenetresOuvertes([{ ...fenetreQuiRepond(null), visibilityState: "hidden" }]);
+
+    await pousser(sw, { event_id: EVENEMENT, room_id: SALON });
+    expect(sw.notifications[0]!.close).not.toHaveBeenCalled();
+    expect(sw.notifications[0]!.options.silent).toBeUndefined();
   });
 
   it("réalerte à chaque message d'une même conversation", async () => {
