@@ -95,6 +95,57 @@ export function depuisFile(
 }
 
 /**
+ * **Le nom d'un média, à la place de son fichier**, pour l'aperçu de l'accueil.
+ *
+ * Les articles font partie des valeurs : l'aperçu construit une phrase (« adam vous a
+ * envoyé **une** photo »), et le genre ne se déduit pas d'un type MIME.
+ *
+ * Volontairement distincte de la table de `apercu`, juste en dessous, qui nomme les
+ * mêmes objets dans un autre registre — « Photo », en tête de citation, et le **nom de
+ * fichier** pour un document, ce qui est exactement ce qu'on refuse ici. Deux registres,
+ * deux tables de quatre lignes ; les fondre demanderait de porter le genre à côté du
+ * nom, pour économiser moins que ce que ça coûterait. **Un type ajouté se pose aux deux
+ * endroits.**
+ */
+const NOM_DU_MEDIA: Record<string, string> = {
+  "m.image": "une photo",
+  "m.video": "une vidéo",
+  "m.audio": "un message vocal",
+  "m.file": "un document",
+};
+
+/**
+ * **L'aperçu d'une conversation sur l'accueil.**
+ *
+ * Il affichait le `body` tel quel, et le `body` d'une pièce jointe est **son nom de
+ * fichier** : l'accueil annonçait `vocal-1793145337523.webm`. Ça ne dit ni ce que c'est,
+ * ni qui l'a envoyé, et ça expose un détail que personne n'a choisi de montrer.
+ *
+ * La phrase nomme toujours la direction, parce que c'est ce qui manquait : « Vous avez
+ * envoyé un message vocal » ou « adam vous a envoyé un message vocal ». Le nom vient de
+ * l'expéditeur et non du salon — sans quoi un groupe dirait « Équipe vous a envoyé… ».
+ *
+ * ⚠️ **Tient de justesse en largeur** : sur 390 px il reste environ 37 caractères à cette
+ * ligne, et « adam vous a envoyé un message vocal » en fait 35. Un nom plus long sera
+ * coupé par l'ellipse d'Astryx. C'est assumé — la direction est ce qu'on a demandé de
+ * voir, et elle est en tête de phrase, donc elle survit à la troncature.
+ */
+export function apercuConversation(conversation: {
+  preview: string;
+  previewMsgtype?: string;
+  previewDeMoi: boolean;
+  previewAuteur?: string;
+  name: string;
+}): string {
+  const quoi = conversation.previewMsgtype && NOM_DU_MEDIA[conversation.previewMsgtype];
+  if (!quoi) return texteAffiche(conversation.preview);
+
+  return conversation.previewDeMoi
+    ? `Vous avez envoyé ${quoi}`
+    : `${conversation.previewAuteur ?? conversation.name} vous a envoyé ${quoi}`;
+}
+
+/**
  * **une ligne pour dire de quoi on parle.**
  *
  * Une pièce jointe n'a pas de texte : son `body` est un nom de fichier, et citer

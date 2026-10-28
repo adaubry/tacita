@@ -44,6 +44,7 @@ const conversation = (partiel: Partial<Conversation> = {}): Conversation => ({
   direct: true,
   peerId: "@alice:t",
   preview: "",
+  previewDeMoi: false,
   timestamp: 0,
   unread: 0,
   mention: false,

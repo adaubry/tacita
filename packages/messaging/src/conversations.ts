@@ -35,6 +35,28 @@ export interface Conversation {
   peerId?: string;
   /** Dernier message texte, tel quel. La troncature est un choix de rendu. */
   preview: string;
+  /**
+   * `msgtype` du dernier message, quand il n'est pas du texte.
+   *
+   * **Sans lui, l'accueil affichait le nom du fichier** — `vocal-1793145337523.webm` —,
+   * parce que c'est ce que Matrix met dans le `body` d'une pièce jointe. Un nom de
+   * fichier n'est pas un aperçu : il ne dit ni ce que c'est, ni qui l'a envoyé, et il
+   * expose un détail que personne n'a choisi de montrer.
+   *
+   * Le paquet rend le **fait** (`m.audio`), jamais la phrase : nommer un média est du
+   * vocabulaire d'interface, et il est déjà écrit une fois dans le shard.
+   */
+  previewMsgtype?: string;
+  /** Le dernier message vient de nous. L'UI en tire « Vous » plutôt qu'un nom. */
+  previewDeMoi: boolean;
+  /**
+   * Nom d'affichage de l'expéditeur du dernier message.
+   *
+   * Nécessaire **à cause des groupes** : en tête-à-tête il vaut le nom du salon, mais
+   * dans un groupe le salon s'appelle « Équipe » et l'expéditeur s'appelle autrement.
+   * S'en passer ferait dire « Équipe vous a envoyé un message vocal ».
+   */
+  previewAuteur?: string;
   /** Horodatage du dernier message, `0` si le salon n'en a aucun. */
   timestamp: number;
   /** Compteur natif de notifications non lues. */
@@ -136,12 +158,22 @@ function describe(session: Session, room: Room, peers: Map<string, string>): Con
   const last = messages(session, room.roomId).at(-1);
   const peerId = peers.get(room.roomId);
 
+  const expediteur = last?.getSender();
+  // `m.text` n'est pas remonté : c'est le cas par défaut, et le rendre explicite
+  // obligerait chaque lecteur à le réécarter.
+  const msgtype = last?.getContent().msgtype as string | undefined;
+
   return {
     roomId: room.roomId,
     name: room.name,
     direct: peerId !== undefined,
     peerId,
     preview: last ? messageText(last) : "",
+    previewMsgtype: msgtype === "m.text" ? undefined : msgtype,
+    previewDeMoi: expediteur !== undefined && expediteur === session.client.getUserId(),
+    // `name` du membre et non l'identifiant : c'est le nom que l'écran affiche partout
+    // ailleurs. Le repli sur l'identifiant est exact, et vaut mieux qu'une ligne vide.
+    previewAuteur: expediteur ? (room.getMember(expediteur)?.name ?? expediteur) : undefined,
     timestamp: last?.getTs() ?? 0,
     unread: room.getUnreadNotificationCount(NotificationCountType.Total),
     mention: room.getUnreadNotificationCount(NotificationCountType.Highlight) > 0,

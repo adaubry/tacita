@@ -20,7 +20,14 @@ interface SalonFictif {
   roomId: string;
   name: string;
   membership?: "join" | "invite" | "leave";
-  messages?: { texte: string; ts: number }[];
+  /**
+   * `msgtype` et `sender` sont optionnels, mais ils font partie du contrat depuis que
+   * l'aperçu doit dire **quoi** et **de qui** : un doublon qui ne modèle pas ce que le
+   * code appelle ne peut infirmer aucune hypothèse.
+   */
+  messages?: { texte: string; ts: number; msgtype?: string; sender?: string }[];
+  /** Nom d'affichage par membre — l'aperçu nomme l'expéditeur, jamais le salon. */
+  nomsMembres?: Record<string, string>;
   unread?: number;
   highlight?: number;
   tags?: string[];
@@ -54,7 +61,9 @@ function fakeClient(salons: SalonFictif[], directs: Record<string, string[]> = {
     getMxcAvatarUrl: () => salon.avatar ?? null,
     getMember: (userId: string) => {
       const mxc = salon.avatarsMembres?.[userId];
-      return mxc === undefined ? null : { getMxcAvatarUrl: () => mxc };
+      const nom = salon.nomsMembres?.[userId];
+      if (mxc === undefined && nom === undefined) return null;
+      return { getMxcAvatarUrl: () => mxc ?? null, name: nom };
     },
   }));
 
@@ -85,8 +94,11 @@ function fakeClient(salons: SalonFictif[], directs: Record<string, string[]> = {
     timeline: (roomId: string) => ({
       events: () =>
         (salons.find((salon) => salon.roomId === roomId)?.messages ?? []).map(
-          ({ texte, ts }) =>
-            ({ ...fakeEvent("$e", { body: texte }, ALICE), getTs: () => ts }) as unknown as MatrixEvent,
+          ({ texte, ts, msgtype, sender }) =>
+            ({
+              ...fakeEvent("$e", { body: texte, msgtype: msgtype ?? "m.text" }, sender ?? ALICE),
+              getTs: () => ts,
+            }) as unknown as MatrixEvent,
         ),
       paginate: async () => false,
     }),
@@ -106,6 +118,47 @@ describe("liste des conversations, compteurs natifs, invitations à part", () =>
       ["!neuf:t", "coucou", 5000],
       ["!vieux:t", "salut", 1000],
     ]);
+  });
+
+  /**
+   * **De quoi nommer une pièce jointe au lieu d'afficher son fichier.** L'accueil rendait
+   * le `body` tel quel, et le `body` d'un vocal est `vocal-1793145337523.webm` : ça ne dit
+   * ni ce que c'est, ni dans quel sens ça va. Le paquet rend les **faits** — le type, la
+   * direction, le nom de l'expéditeur — et la phrase reste au shard.
+   */
+  it("l'aperçu porte le type du dernier message, sa direction et son auteur", () => {
+    const { session } = fakeClient([
+      {
+        roomId: "!dm:t",
+        name: "alice",
+        nomsMembres: { [ALICE]: "alice" },
+        messages: [{ texte: "vocal-179.webm", ts: 1000, msgtype: "m.audio" }],
+      },
+      {
+        roomId: "!moi:t",
+        name: "groupe",
+        nomsMembres: { [MOI]: "bob" },
+        messages: [{ texte: "IMG_4417.HEIC", ts: 2000, msgtype: "m.image", sender: MOI }],
+      },
+    ]);
+
+    const [mien, delle] = conversations(session);
+
+    expect(delle).toMatchObject({
+      previewMsgtype: "m.audio",
+      previewDeMoi: false,
+      previewAuteur: "alice",
+    });
+    expect(mien).toMatchObject({ previewMsgtype: "m.image", previewDeMoi: true, previewAuteur: "bob" });
+  });
+
+  it("un message texte ne porte aucun type : c'est le cas par défaut", () => {
+    const { session } = fakeClient([
+      { roomId: "!a:t", name: "a", messages: [{ texte: "coucou", ts: 1000 }] },
+    ]);
+    // `undefined` et non `"m.text"` : le rendre explicite obligerait chaque lecteur à le
+    // réécarter, et le `body` d'un texte est déjà le bon aperçu.
+    expect(conversations(session)[0]!.previewMsgtype).toBeUndefined();
   });
 
   it("relaie les compteurs natifs tels quels, mention comprise", () => {

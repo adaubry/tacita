@@ -75,6 +75,7 @@ const conversation = (unread: number): Conversation => ({
   direct: true,
   peerId: "@mira:t",
   preview: "",
+  previewDeMoi: false,
   timestamp: 0,
   unread,
   mention: false,

@@ -44,6 +44,7 @@ function conversation(partiel: Partial<Conversation> = {}): Conversation {
     direct: true,
     peerId: MIRA,
     preview: "à demain",
+    previewDeMoi: false,
     timestamp: LUNDI_10H,
     unread: 0,
     mention: false,
