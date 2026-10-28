@@ -105,3 +105,25 @@ describe("sources réelles : ce qu'une caméra écrit, et pas seulement nous", (
     await expect(lireMp4(new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0, 0, 0, 0]) as Bytes)).rejects.toThrow();
   });
 });
+
+describe("le chemin rapide : le poids décide, pas la hauteur", () => {
+  const cibles = PROFILES.good.video;
+  /** Le film de la caméra in-app : 1080p portrait, enregistré au débit de la cible. */
+  const filmCamera = { codec: "avc1.640028", hauteur: 1920, debitBps: 2_400_000, pistes: 2 };
+
+  it("le film de la caméra se remuxe : le réencoder n'ôterait aucun octet", () => {
+    expect(remuxable(filmCamera, cibles)).toBe(true);
+  });
+
+  it("une 4K se réduit toujours, même légère", () => {
+    expect(remuxable({ ...filmCamera, hauteur: 2160 }, cibles)).toBe(false);
+  });
+
+  it("un débit au-dessus de la cible se réduit", () => {
+    expect(remuxable({ ...filmCamera, debitBps: 8_000_000 }, cibles)).toBe(false);
+  });
+
+  it("le HEVC ne se remuxe jamais, quel que soit son poids", () => {
+    expect(remuxable({ ...filmCamera, codec: "hvc1.1.6.L120.B0" }, cibles)).toBe(false);
+  });
+});
