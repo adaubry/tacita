@@ -36,5 +36,8 @@ export const ELEMENT_CALL_URL =
  */
 export const PUSH_CONFIG_URL = `${HOMESERVER.replace(/\/$/, "")}/push/config`;
 
+/** La page y signale qu'elle est à l'écran : la passerelle ne lui pousse rien pendant ce temps. */
+export const PUSH_PRESENCE_URL = `${HOMESERVER.replace(/\/$/, "")}/push/presence`;
+
 export const PUSH_NOTIFY_URL =
   process.env.NEXT_PUBLIC_PUSH_NOTIFY_URL ?? "http://push-gateway:8008/_matrix/push/v1/notify";

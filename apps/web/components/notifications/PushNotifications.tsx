@@ -8,7 +8,9 @@ import {
   apercuLocal,
   brancherPush,
   demanderEtBrancher,
+  endpointPush,
   etatPushLocal,
+  signalerPresence,
   TYPE_APERCU,
   type EtatPush,
 } from "../../lib/push";
@@ -16,6 +18,9 @@ import { Sheet } from "../foundation/Sheet";
 import { Button, Text, VStack } from "../foundation/primitives";
 import { IosPushEducation } from "../onboarding/IosPushEducation";
 import { useSession } from "../onboarding/SessionProvider";
+
+/** Bien en deçà des 45 s de la passerelle : un battement perdu ne lâche pas la présence. */
+const PRESENCE_INTERVALLE_MS = 20_000;
 
 /**
  * la chaîne push côté fenêtre. Elle ne rend presque jamais rien.
@@ -77,6 +82,43 @@ export function PushNotifications({ indexedDB }: PushNotificationsProps = {}) {
   useEffect(() => {
     if (!session || etatPushLocal() !== "accordee") return;
     void brancherPush(session);
+  }, [session]);
+
+  // Rôle 4 — la présence. Tant que la page est visible, la passerelle ne lui pousse
+  // rien : renouvelée bien avant l'échéance de la passerelle (45 s), retirée dès que la
+  // page passe en arrière-plan.
+  useEffect(() => {
+    if (!session || etatPushLocal() !== "accordee") return;
+
+    let endpoint: string | undefined;
+    let minuteur: ReturnType<typeof setInterval> | undefined;
+    const envoyer = (visible: boolean) => {
+      if (endpoint) void signalerPresence(endpoint, visible).catch(() => {});
+    };
+
+    const surVisibilite = () => {
+      clearInterval(minuteur);
+      if (document.visibilityState === "visible") {
+        // Relu à chaque retour : le navigateur peut avoir tourné l'abonnement.
+        void endpointPush()
+          .then((valeur) => {
+            endpoint = valeur;
+            envoyer(true);
+          })
+          .catch(() => {});
+        minuteur = setInterval(() => envoyer(true), PRESENCE_INTERVALLE_MS);
+      } else {
+        envoyer(false);
+      }
+    };
+
+    surVisibilite();
+    document.addEventListener("visibilitychange", surVisibilite);
+    return () => {
+      clearInterval(minuteur);
+      document.removeEventListener("visibilitychange", surVisibilite);
+      envoyer(false);
+    };
   }, [session]);
 
   // Rôle 3 — le déclencheur : un message non lu est arrivé.
