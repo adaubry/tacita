@@ -412,24 +412,45 @@ export async function transcoderVideo(blob: Blob, cibles: VideoTargets): Promise
       reduite.close();
     },
     error: (cause) => {
-      erreur ??= new Error(`décodage vidéo interrompu : ${cause.name}`);
+      // Le message de WebCodecs ne cite pas le média : il dit pourquoi le décodeur a lâché.
+      erreur ??= new Error(`décodage vidéo interrompu : ${cause.name} (${cause.message})`);
     },
   });
   decodeur.configure(configSource);
 
+  /*
+   * **Le décodeur exige une image clé en premier.** Une image qui la précède ne peut de
+   * toute façon pas se décoder : elle est laissée, plutôt que de faire tomber le décodeur
+   * — qui ne répond plus ensuite que « not configured » à chaque image.
+   */
+  const premiereCle = source.echantillons.findIndex((echantillon) => echantillon.cle);
+  if (premiereCle < 0) {
+    throw new EchecTranscodage("codec-source", "aucune image clé dans la vidéo : décodage impossible");
+  }
+
   try {
-    for (const echantillon of source.echantillons) {
+    for (const echantillon of source.echantillons.slice(premiereCle)) {
       if (erreur) throw erreur;
       // Contrôle de flux : sans lecteur pour cadencer, c'est la seule chose qui empêche
       // le décodeur de prendre toute la mémoire disponible.
       await attendre(() => encodeur.encodeQueueSize > FILE_MAX || decodeur.decodeQueueSize > FILE_MAX);
-      decodeur.decode(
-        new EncodedVideoChunk({
-          type: echantillon.cle ? "key" : "delta",
-          timestamp: echantillon.timestampUs,
-          data: echantillon.donnees as BufferSource,
-        }),
-      );
+      try {
+        decodeur.decode(
+          new EncodedVideoChunk({
+            type: echantillon.cle ? "key" : "delta",
+            timestamp: echantillon.timestampUs,
+            data: echantillon.donnees as BufferSource,
+          }),
+        );
+      } catch (cause) {
+        /*
+         * La vraie raison arrive par le rappel `error`, une tâche plus tard ; ce qui lève
+         * ici n'en est que la conséquence (« VideoDecoder is not configured »). On lui
+         * laisse le temps d'arriver, et c'est elle qu'on remonte.
+         */
+        await new Promise((resoudre) => setTimeout(resoudre, 0));
+        throw erreur ?? cause;
+      }
     }
 
     await decodeur.flush();

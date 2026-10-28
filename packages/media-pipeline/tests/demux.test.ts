@@ -84,6 +84,44 @@ describe("démuxage : ce qu'une bibliothèque indépendante lit de notre contene
   });
 });
 
+describe("l'image clé se lit dans le flux, pas seulement dans le conteneur", () => {
+  /** Échantillons AVCC : longueur sur 4 octets, puis la NAL (type dans les 5 bits bas). */
+  const nal = (type: number) => [0, 0, 0, 3, type, 0x88, 0x84];
+  const IDR = 0x65; // type 5
+  const TRANCHE = 0x41; // type 1, image non IDR
+  const SEI = 0x06; // type 6
+
+  it("reconnaît une IDR, y compris derrière une autre NAL", async () => {
+    const { contientIdr } = await import("../src/demux");
+    expect(contientIdr(new Uint8Array(nal(IDR)), 4)).toBe(true);
+    expect(contientIdr(new Uint8Array([...nal(SEI), ...nal(IDR)]), 4)).toBe(true);
+    expect(contientIdr(new Uint8Array(nal(TRANCHE)), 4)).toBe(false);
+  });
+
+  it("un échantillon qui ne se découpe pas n'est jamais pris pour une IDR", async () => {
+    const { contientIdr } = await import("../src/demux");
+    // Une longueur annoncée qui déborde de l'échantillon : on ne devine rien.
+    expect(contientIdr(new Uint8Array([0, 0, 0, 99, IDR, 0x88]), 4)).toBe(false);
+    expect(contientIdr(new Uint8Array([0, 0, 0, 0, IDR]), 4)).toBe(false);
+  });
+
+  it("une IDR que le conteneur n'a pas marquée devient image clé — le MP4 de Safari", async () => {
+    const source = await lireMp4(
+      ecrireMp4({
+        largeur: 320,
+        hauteur: 240,
+        description: DESCRIPTION,
+        echantillons: [
+          { donnees: new Uint8Array(nal(IDR)) as Bytes, timestampUs: 0, cle: false },
+          { donnees: new Uint8Array(nal(TRANCHE)) as Bytes, timestampUs: PAS_US, cle: false },
+        ],
+      }),
+    );
+    // La première est attestée par le flux ; la seconde reste ce qu'elle est.
+    expect(source.echantillons.map((echantillon) => echantillon.cle)).toEqual([true, false]);
+  });
+});
+
 describe("`ctts` : l'ordre de présentation survit aux images B", () => {
   /**
    * Prérequis bloquant du profil High. Sans la table, un lecteur affiche les images dans
