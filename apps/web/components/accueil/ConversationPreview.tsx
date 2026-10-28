@@ -5,9 +5,11 @@ import { useState } from "react";
 
 import { apercuConversation } from "../conversation/message";
 import { ButtonsList } from "../foundation/ButtonsList";
+import { Confirmation } from "../foundation/Confirmation";
 import { ConversationAvatar } from "../foundation/ConversationAvatar";
 import { cleTeinte, variablesTeinte } from "../foundation/teinte";
 import { Sheet } from "../foundation/Sheet";
+import { texteQuitter } from "../settings/OptionsConversation";
 import { Badge, ClickableCard, Text } from "../foundation/primitives";
 import { dateApercu } from "../../lib/dates";
 import { useGlissement } from "../../lib/gestes";
@@ -16,6 +18,12 @@ interface ConversationPreviewProps {
   conversation: Conversation;
   onOuvrir: (roomId: string) => void;
   onEpingler: (roomId: string, epingle: boolean) => void;
+  /**
+   * Supprimer la conversation (quitter, chez Matrix). Absent, le menu ne la propose pas.
+   * Rejette en cas d'échec : la confirmation se referme et la ligne reste, ce qui est la
+   * vérité de ce qui s'est passé.
+   */
+  onQuitter?: (roomId: string) => Promise<void>;
   /** Injecté en test, pour que « aujourd'hui » ne dépende pas de l'heure du CI. */
   maintenant?: number;
   /**
@@ -67,10 +75,13 @@ export function ConversationPreview({
   conversation,
   onOuvrir,
   onEpingler,
+  onQuitter,
   maintenant,
   simple = false,
 }: ConversationPreviewProps) {
   const [menuOuvert, setMenuOuvert] = useState(false);
+  const [confirmer, setConfirmer] = useState(false);
+  const [enCours, setEnCours] = useState(false);
   const geste = useGlissement(
     simple
       ? {}
@@ -167,9 +178,44 @@ export function ConversationPreview({
                 onEpingler(conversation.roomId, !conversation.pinned);
               },
             },
+            /*
+             * Le même geste que la dernière carte de `/c/infos`, à l'endroit où on le
+             * cherche : on maintient la conversation qu'on veut voir partir.
+             */
+            ...(onQuitter
+              ? [
+                  {
+                    cle: "quitter",
+                    libelle: conversation.direct ? "Supprimer la conversation" : "Quitter le groupe",
+                    destructif: true,
+                    onClick: () => {
+                      setMenuOuvert(false);
+                      setConfirmer(true);
+                    },
+                  },
+                ]
+              : []),
           ]}
         />
       </Sheet>
+
+      {onQuitter && (
+        <Confirmation
+          ouvert={confirmer}
+          {...texteQuitter(conversation.direct)}
+          enCours={enCours}
+          onAnnuler={() => setConfirmer(false)}
+          onConfirmer={() => {
+            setEnCours(true);
+            void onQuitter(conversation.roomId)
+              .catch(() => {})
+              .finally(() => {
+                setEnCours(false);
+                setConfirmer(false);
+              });
+          }}
+        />
+      )}
     </>
   );
 }

@@ -253,6 +253,41 @@ describe("épingler : glissement droit, et son équivalent non gestuel", () => {
     expect(onEpingler).toHaveBeenCalledWith("!salon:tacita.test", true);
   });
 
+  it("le menu de la conversation la supprime, après confirmation", async () => {
+    const onQuitter = vi.fn(async () => {});
+    render(
+      <ConversationPreview
+        conversation={conversation({ direct: true })}
+        onOuvrir={vi.fn()}
+        onEpingler={vi.fn()}
+        onQuitter={onQuitter}
+      />,
+    );
+
+    // Le glissement gauche ouvre la même feuille que l'appui long.
+    glisser(carte("alice"), -SEUIL_GLISSEMENT);
+    fireEvent.click(await screen.findByRole("button", { name: "Supprimer la conversation" }));
+    expect(onQuitter).not.toHaveBeenCalled();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Supprimer" }));
+    await waitFor(() => expect(onQuitter).toHaveBeenCalledWith("!salon:tacita.test"));
+  });
+
+  it("un groupe se quitte, il ne se supprime pas", async () => {
+    render(
+      <ConversationPreview
+        conversation={conversation({ direct: false })}
+        onOuvrir={vi.fn()}
+        onEpingler={vi.fn()}
+        onQuitter={vi.fn(async () => {})}
+      />,
+    );
+
+    glisser(carte("alice"), -SEUIL_GLISSEMENT);
+    expect(await screen.findByRole("button", { name: "Quitter le groupe" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Supprimer la conversation" })).toBeNull();
+  });
+
   it("en deçà du seuil, ou vers la gauche, rien ne se passe", () => {
     const onEpingler = vi.fn();
     render(

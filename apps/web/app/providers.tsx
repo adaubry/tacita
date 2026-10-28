@@ -13,6 +13,7 @@ import { AppelEntrant } from "../components/appels/AppelEntrant";
 import { OutboxProvider } from "../components/conversation/OutboxProvider";
 import { ConnectionBannerLive } from "../components/foundation/ConnectionBanner";
 import { Theme, type ThemeMode } from "../components/foundation/primitives";
+import { PALETTE } from "../components/foundation/palette";
 import { tacitaTheme } from "../components/foundation/theme";
 import { PushNotifications } from "../components/notifications/PushNotifications";
 import { RechercheProvider } from "../components/recherche/RechercheProvider";
@@ -57,6 +58,24 @@ export function Providers({ children }: { children: ReactNode }) {
       annule = true;
     };
   }, []);
+
+  /*
+   * **Le thème doit atteindre ce que `Theme` ne couvre pas** : `html`, que le clavier
+   * iOS découvre en remontant la page, et la barre d'état de la PWA, qui prend sa couleur
+   * dans `theme-color`. Les deux étaient au blanc du navigateur en thème sombre.
+   *
+   * `theme-color` est posé par le layout selon le thème **du système** — le seul connu
+   * avant tout script. Le mode choisi dans l'app peut le contredire : on le réécrit.
+   */
+  useEffect(() => {
+    const racine = document.documentElement;
+    racine.style.colorScheme = mode === "system" ? "light dark" : mode;
+    racine.style.backgroundColor = `light-dark(${PALETTE.bg.clair}, ${PALETTE.bg.sombre})`;
+    for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
+      const sombre = mode === "dark" || (mode === "system" && meta.media.includes("dark"));
+      meta.content = sombre ? PALETTE.bg.sombre : PALETTE.bg.clair;
+    }
+  }, [mode]);
 
   const changerMode = useCallback((suivant: ThemeMode) => {
     setMode(suivant);

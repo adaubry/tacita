@@ -5,6 +5,7 @@ import {
   conversations as listerConversations,
   createGroupChat,
   invitations,
+  leaveConversation,
   openDirectMessage,
   setFavourite,
   subscribeConversations,
@@ -76,6 +77,14 @@ export function Accueil() {
     [session],
   );
 
+  // La liste suit `subscribeConversations` : le salon quitté en sort de lui-même.
+  const quitter = useCallback(
+    async (roomId: string) => {
+      if (session) await leaveConversation(session, roomId);
+    },
+    [session],
+  );
+
   const ouvrir = useCallback((roomId: string) => router.push(routeConversation(roomId)), [router]);
 
   /*
@@ -137,6 +146,7 @@ export function Accueil() {
         tri={tri}
         onOuvrir={ouvrir}
         onEpingler={epingler}
+        onQuitter={quitter}
         onDemarrer={() => setCreation(true)}
       />
 
