@@ -677,12 +677,12 @@ describe("capture : « sur votre appareil » et « envoyé » ne se confondent p
 
       pointeur("pointerdown", 500);
       await screen.findByText("0:00", undefined, { timeout: 1000 });
-      // 150 px sur une course de 300 : la moitié du chemin de 1× à 5×.
+      // 150 px sur une course de 600 : le quart du chemin de 1× à 5×.
       pointeur("pointermove", 350);
       await waitFor(() =>
-        expect(pisteVideo.applyConstraints).toHaveBeenLastCalledWith({ advanced: [{ zoom: 3 }] }),
+        expect(pisteVideo.applyConstraints).toHaveBeenLastCalledWith({ advanced: [{ zoom: 2 }] }),
       );
-      expect(screen.getByText("0:00 · 3,0×")).toBeTruthy();
+      expect(screen.getByText("0:00 · 2,0×")).toBeTruthy();
 
       pointeur("pointerup", 350);
       await waitFor(() =>
