@@ -83,8 +83,8 @@ const conversation = (unread: number): Conversation => ({
 });
 
 /** Les pushers que Synapse porte pour ce compte — la troisième moitié de la chaîne. */
-let pushers: { app_id: string; pushkey: string; data: Record<string, unknown> }[] = [];
-const setPusher = vi.fn(async (pusher: { app_id: string; pushkey: string; data: Record<string, unknown> }) => {
+let pushers: { app_id: string; pushkey: string; device_display_name?: string; data: Record<string, unknown> }[] = [];
+const setPusher = vi.fn(async (pusher: (typeof pushers)[number]) => {
   pushers = [...pushers.filter((p) => p.pushkey !== pusher.pushkey), pusher];
 });
 
@@ -324,11 +324,23 @@ describe("la chaîne se répare seule, et se dit quand elle ne le peut pas", () 
   it("ne réécrit rien quand les trois maillons sont déjà en place", async () => {
     vi.stubGlobal("Notification", { permission: "granted", requestPermission: vi.fn() });
     abonnement = faireAbonnement();
-    pushers = [{ app_id: "org.tacita.web", pushkey: ENDPOINT, data: {} }];
+    pushers = [{ app_id: "org.tacita.web", pushkey: ENDPOINT, device_display_name: "D1", data: {} }];
 
     expect((await brancherPush(session())).etat).toBe("abonne");
     expect(setPusher).not.toHaveBeenCalled();
     expect(serviceWorker.pushManager.subscribe).not.toHaveBeenCalled();
+  });
+
+  it("rattache à cet appareil un pusher qu'un appareil précédent a posé", async () => {
+    // Reconnexion dans la même PWA : même abonnement, nouvel appareil Matrix. Laissé à
+    // l'ancien, le pusher disparaît quand on révoque celui-ci.
+    vi.stubGlobal("Notification", { permission: "granted", requestPermission: vi.fn() });
+    abonnement = faireAbonnement();
+    pushers = [{ app_id: "org.tacita.web", pushkey: ENDPOINT, device_display_name: "ANCIEN", data: {} }];
+
+    await brancherPush(session());
+    expect(setPusher).toHaveBeenCalledOnce();
+    expect(setPusher.mock.calls[0]![0].device_display_name).toBe("D1");
   });
 
   it("réenregistre le pusher quand le navigateur a tourné son abonnement", async () => {
