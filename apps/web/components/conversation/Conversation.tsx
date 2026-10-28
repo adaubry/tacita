@@ -129,7 +129,7 @@ export function Conversation({ roomId }: { roomId: string }) {
   // lit `navigator.connection`, ni l'un ni l'autre à refaire à chaque rendu. Les deux
   // gestes qui l'accompagnent — déchiffrer, sauvegarder — viennent du même endroit que
   // pour les autres écrans à médias.
-  const { env, avis, telecharger, telechargerChiffre, sauvegarder } = useMediaActions(session);
+  const { env, avis, avisDetail, telecharger, telechargerChiffre, sauvegarder } = useMediaActions(session);
   /**
    * l'échec **dédié** de la compression, distinct de l'absence de bouton.
    *
@@ -460,6 +460,7 @@ export function Conversation({ roomId }: { roomId: string }) {
     setEnvoiMedia(true);
     setErreurMedia(undefined);
     avis.current = undefined;
+    avisDetail.current = undefined;
     try {
       for (const fichier of fichiers) {
         /*
@@ -504,8 +505,11 @@ export function Conversation({ roomId }: { roomId: string }) {
       if (avis.current === "video-sans-son") {
         setErreurMedia("Cette vidéo est partie sans le son : son format audio ne peut pas être transporté.");
       } else if (avis.current === "video-non-compressee") {
+        // La raison est technique, et dite quand même : c'est elle qui permet de réparer.
         setErreurMedia(
-          "Cette vidéo est partie telle quelle : ce navigateur ne sait pas la recompresser. Elle est donc plus lourde que d'habitude.",
+          `Cette vidéo est partie telle quelle : ce navigateur n'a pas su la recompresser${
+            avisDetail.current ? ` (raison : ${avisDetail.current})` : ""
+          }. Elle est donc plus lourde que d'habitude.`,
         );
       }
     } catch (cause) {

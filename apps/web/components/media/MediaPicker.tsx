@@ -107,7 +107,21 @@ export function MediaPicker({
       )}
 
       {erreur && !enCours && (
-        <div style={messageFlottant}>
+        /*
+         * **Un avis passe à la ligne**, contrairement à « Envoi en cours… » : le sien est une
+         * phrase, parfois deux, et en `nowrap` elle sortait de l'écran par la droite — on
+         * n'en lisait que le début. Largeur de l'écran moins la marge de la barre, et un
+         * fond, parce qu'elle se pose désormais sur plusieurs lignes de conversation.
+         */
+        <div
+          style={{
+            ...messageFlottant,
+            whiteSpace: "normal",
+            width: "calc(100vw - 2 * var(--spacing-2))",
+            paddingTop: "var(--spacing-1)",
+            background: "var(--color-background-body)",
+          }}
+        >
           <Text type="supporting" color="secondary">
             {erreur}
           </Text>
