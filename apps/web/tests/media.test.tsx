@@ -479,7 +479,7 @@ describe("capture : « sur votre appareil » et « envoyé » ne se confondent p
    * photo au premier plan d'un écran censé en prendre une nouvelle, dont le seul moyen de
    * sortir était de recharger la page.
    */
-  it("une feuille rouverte montre la caméra, jamais la photo d'avant", async () => {
+  it("un écran rouvert montre la caméra, jamais la photo d'avant", async () => {
     const { rerender } = render(
       <PhotoCapture ouvert onFermer={vi.fn()} onEnregistrer={vi.fn()} onEnvoyer={vi.fn()} />,
     );
@@ -515,7 +515,50 @@ describe("capture : « sur votre appareil » et « envoyé » ne se confondent p
     expect(onEnregistrer.mock.calls[0]![1]).toBe(onEnvoyer.mock.calls[0]![0].name);
   });
 
-  it("sans API caméra, la feuille le dit — et ne renvoie pas vers un réglage inexistant", async () => {
+  it("demande une vraie définition, et retourne la caméra en éteignant l'autre", async () => {
+    const pistes = [{ stop: vi.fn() }, { stop: vi.fn() }];
+    let appel = 0;
+    const getUserMedia = vi.fn(
+      async (_contraintes: MediaStreamConstraints) =>
+        ({ getTracks: () => [pistes[appel++]!] }) as unknown as MediaStream,
+    );
+    Object.defineProperty(globalThis.navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia },
+    });
+
+    render(<PhotoCapture ouvert onFermer={vi.fn()} onEnregistrer={vi.fn()} onEnvoyer={vi.fn()} />);
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledOnce());
+    // Sans contrainte de taille, Safari rend 640 × 480.
+    expect(getUserMedia.mock.calls[0]![0]).toMatchObject({
+      video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Passer à la caméra avant" }));
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
+    expect(getUserMedia.mock.calls[1]![0]).toMatchObject({ video: { facingMode: "user" } });
+    // La caméra arrière s'est éteinte avant que l'avant ne s'allume.
+    expect(pistes[0]!.stop).toHaveBeenCalled();
+    expect(screen.getByLabelText("Aperçu de la caméra").style.transform).toBe("scaleX(-1)");
+  });
+
+  it("après « Reprendre », l'aperçu retrouve le flux de la caméra", async () => {
+    render(<PhotoCapture ouvert onFermer={vi.fn()} onEnregistrer={vi.fn()} onEnvoyer={vi.fn()} />);
+    await prendre();
+    fireEvent.click(screen.getByRole("button", { name: "Reprendre" }));
+
+    const apercu = (await screen.findByLabelText("Aperçu de la caméra")) as HTMLVideoElement;
+    expect(apercu.srcObject).toBe(flux);
+  });
+
+  it("Échap rend la main au parent, qui tient l'ouverture", async () => {
+    const onFermer = vi.fn();
+    render(<PhotoCapture ouvert onFermer={onFermer} onEnregistrer={vi.fn()} onEnvoyer={vi.fn()} />);
+    fireEvent(screen.getByRole("dialog", { name: "Prendre une photo", hidden: true }), new Event("cancel", { cancelable: true }));
+    expect(onFermer).toHaveBeenCalledOnce();
+  });
+
+  it("sans API caméra, l'écran le dit — et ne renvoie pas vers un réglage inexistant", async () => {
     // Hors contexte sécurisé, `mediaDevices` est absent. L'optionnel court-circuitait
     // toute la chaîne : ni flux, ni erreur, un bouton désactivé et pas un mot.
     Object.defineProperty(globalThis.navigator, "mediaDevices", {

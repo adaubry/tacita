@@ -200,9 +200,42 @@
 
 /* Le changement reste, la transition part : l'état est une information, l'animation non. */
 @media (prefers-reduced-motion: reduce) {
-  .tacita-retour:not(#\#):not(#\#):not(#\#):not(#\#) {
+  .tacita-retour:not(#\#):not(#\#):not(#\#):not(#\#),
+  .tacita-declencheur {
     transition: none;
   }
+}
+
+/*
+ * Le déclencheur de la caméra plein écran : un anneau blanc, un jour, un disque blanc —
+ * la forme que tout le monde reconnaît, Instagram, Snapchat ou l'appareil photo d'iOS.
+ * Blanc et non un jeton : il est posé sur l'image de la caméra, pas sur une surface du
+ * thème, et c'est la seule couleur qui s'y lise toujours.
+ *
+ * `background-clip: content-box` + le rembourrage dessinent le jour entre l'anneau et le
+ * disque avec un seul élément.
+ */
+.tacita-declencheur {
+  appearance: none;
+  width: 76px;
+  height: 76px;
+  padding: 4px;
+  border: 4px solid #fff;
+  border-radius: 50%;
+  background: #fff;
+  background-clip: content-box;
+  cursor: pointer;
+  transition: transform 140ms ease-out;
+}
+
+.tacita-declencheur:active {
+  transform: scale(0.92);
+}
+
+/* Avant que le flux n'arrive : visible, mais visiblement pas prêt. */
+.tacita-declencheur:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /*
