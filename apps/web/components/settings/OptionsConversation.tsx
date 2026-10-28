@@ -18,6 +18,30 @@ export type OptionConversation =
   | "membres"
   | "quitter";
 
+/**
+ * **Supprimer la conversation, c'est la quitter.** Matrix n'efface rien : le salon
+ * continue d'exister, l'autre voit le départ, et ce qu'on perd est l'historique local.
+ * La confirmation le dit tel quel — promettre une suppression serait l'interdit n°13.
+ *
+ * Une seule source pour les deux chemins qui la posent : `/c/infos` et l'appui long de
+ * l'accueil.
+ */
+export function texteQuitter(direct: boolean) {
+  return direct
+    ? {
+        titre: "Supprimer cette conversation ?",
+        corps:
+          "Vous quitterez la conversation. Son historique ne vous sera plus accessible sur cet appareil, et votre interlocuteur verra que vous l'avez quittée.",
+        action: "Supprimer",
+      }
+    : {
+        titre: "Quitter ce groupe ?",
+        corps:
+          "Vous quitterez le groupe, qui continuera sans vous. Son historique ne vous sera plus accessible sur cet appareil, et les membres verront votre départ.",
+        action: "Quitter",
+      };
+}
+
 interface OptionsConversationProps {
   direct: boolean;
   /** l'état courant se lit sous l'option, sans avoir à l'ouvrir. */

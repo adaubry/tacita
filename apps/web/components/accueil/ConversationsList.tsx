@@ -17,6 +17,7 @@ interface ConversationsListProps {
   tri?: Tri;
   onOuvrir: (roomId: string) => void;
   onEpingler: (roomId: string, epingle: boolean) => void;
+  onQuitter?: (roomId: string) => Promise<void>;
   /** L'action de l'état vide — « démarrez votre première conversation ». */
   onDemarrer?: () => void;
   maintenant?: number;
@@ -50,6 +51,7 @@ export function ConversationsList({
   tri = "recentes",
   onOuvrir,
   onEpingler,
+  onQuitter,
   onDemarrer,
   maintenant,
 }: ConversationsListProps) {
@@ -99,6 +101,7 @@ export function ConversationsList({
             conversation={conversation}
             onOuvrir={onOuvrir}
             onEpingler={onEpingler}
+            onQuitter={onQuitter}
             maintenant={maintenant}
           />
         </div>

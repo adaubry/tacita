@@ -46,7 +46,7 @@ import { InfoButtons } from "./InfoButtons";
 import { LienInvitation } from "./LienInvitation";
 import { MembresGroupe } from "./MembresGroupe";
 import { NotificationsSalon, libelleNiveau } from "./NotificationsSalon";
-import { OptionsConversation, type OptionConversation } from "./OptionsConversation";
+import { OptionsConversation, texteQuitter, type OptionConversation } from "./OptionsConversation";
 import { ThemeConversation } from "./ThemeConversation";
 import { routeConversation } from "../../lib/routes";
 
@@ -222,23 +222,12 @@ export function InfosConversation({ roomId }: { roomId: string }) {
       />
 
       {/*
-       * **Supprimer la conversation, c'est la quitter.** Matrix n'efface rien : le salon
-       * continue d'exister, l'autre voit le départ, et ce qu'on perd est l'historique
-       * local. La confirmation le dit tel quel — promettre une suppression serait
-       * exactement l'interdit n°13.
-       *
        * `router.replace` et non `push` : revenir en arrière rouvrirait une conversation
        * qu'on vient de quitter, c'est-à-dire un écran vide sans moyen d'en sortir.
        */}
       <Confirmation
         ouvert={panneau === "quitter"}
-        titre={direct ? "Supprimer cette conversation ?" : "Quitter ce groupe ?"}
-        corps={
-          direct
-            ? "Vous quitterez la conversation. Son historique ne vous sera plus accessible sur cet appareil, et votre interlocuteur verra que vous l'avez quittée."
-            : "Vous quitterez le groupe, qui continuera sans vous. Son historique ne vous sera plus accessible sur cet appareil, et les membres verront votre départ."
-        }
-        action={direct ? "Supprimer" : "Quitter"}
+        {...texteQuitter(direct)}
         enCours={enCours}
         onAnnuler={() => setPanneau(undefined)}
         onConfirmer={() => {

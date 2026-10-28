@@ -296,10 +296,8 @@ export function MessageObject({
           dise déjà — il prendrait seulement 48 px de largeur de lecture. */}
       {!moi && (
         <div style={{ width: 40, flexShrink: 0 }}>
-          {/* ponytail: un `useImageMxc` par en-tête, donc un `fetch` par en-tête pour le
-              même auteur. C'est le cache HTTP du navigateur qui absorbe les suivants, un
-              média Matrix étant immuable. À mutualiser dans `ConversationAvatar` le jour où
-              une timeline longue le fait sentir — pas avant, ce serait un cache de plus. */}
+          {/* Un `useImageMxc` par en-tête, mais un seul `fetch` par auteur : le cache
+              est mutualisé dans le hook. */}
           {entete && <ConversationAvatar nom={message.nom} mxc={message.avatar} direct taille={40} cle={message.auteur} />}
         </div>
       )}
