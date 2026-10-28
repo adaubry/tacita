@@ -367,6 +367,43 @@ async function openCredentials(indexedDB: IDBFactory) {
 /** Le magasin, pas les credentials : `saved.read()`, pas `saved.accessToken`. */
 type CredentialStore = Awaited<ReturnType<typeof openCredentials>>;
 
+/**
+ * **Une connexion remplace l'appareil précédent de ce navigateur, elle ne l'abandonne pas.**
+ *
+ * Chaque connexion crée un appareil Matrix neuf. Quand `restoreSession` échoue sans que
+ * le jeton ait été refusé (store crypto illisible, wasm absent), il rend `null` *sans*
+ * effacer — et l'utilisateur se reconnecte. L'ancien appareil gardait alors un jeton
+ * valide pour toujours, et son pusher avec : un compte en accumulait un par reprise
+ * ratée, chacun capable de lire ses notifications.
+ *
+ * Seul l'appareil dont ce navigateur détient le jeton est visé, avec ce jeton-là : aucun
+ * mot de passe à redemander, aucun moyen de toucher le téléphone ou l'ordinateur d'à
+ * côté. Un échec (jeton déjà mort, réseau) ne fait jamais échouer la connexion.
+ */
+async function remplacerAppareil(
+  saved: CredentialStore,
+  credentials: StoredCredentials,
+  homeserverUrl: string,
+): Promise<void> {
+  const precedent = await saved.read().catch(() => undefined);
+  await saved.write(credentials);
+  if (
+    !precedent ||
+    precedent.userId !== credentials.userId ||
+    precedent.deviceId === credentials.deviceId
+  ) {
+    return;
+  }
+  await createClient({
+    baseUrl: homeserverUrl,
+    accessToken: precedent.accessToken,
+    userId: precedent.userId,
+    deviceId: precedent.deviceId,
+  })
+    .logout()
+    .catch(() => {});
+}
+
 function requireCrypto(client: MatrixClient): CryptoApi {
   const crypto = client.getCrypto();
   if (!crypto) {
@@ -919,7 +956,7 @@ export async function initSession(config: SessionConfig): Promise<Session> {
   };
 
   const saved = await openCredentials(config.indexedDB ?? globalThis.indexedDB);
-  await saved.write(credentials);
+  await remplacerAppareil(saved, credentials, config.homeserverUrl);
   const session = await buildSession(credentials, config, saved, config.motDePasse);
 
   /*
@@ -1039,7 +1076,7 @@ export async function connexionParCle(
   };
 
   const saved = await openCredentials(config.indexedDB ?? globalThis.indexedDB);
-  await saved.write(credentials);
+  await remplacerAppareil(saved, credentials, config.homeserverUrl);
   const session = await buildSession(credentials, config, saved);
 
   /*

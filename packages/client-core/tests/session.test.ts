@@ -396,3 +396,51 @@ describe("déconnexion = wipe complet des données locales", () => {
     expect(client.clearStores).toHaveBeenCalledOnce();
   });
 });
+
+describe("une connexion remplace l'appareil précédent de ce navigateur", () => {
+  it("déconnecte l'ancien appareil du même compte, avec son propre jeton", async () => {
+    await initSession(config);
+    // Un second client neuf : le mock verrouille la crypto du premier, comme le vrai.
+    ({ crypto, client } = resetSdk());
+    client.loginRequest.mockResolvedValueOnce({
+      access_token: "syt_neuf",
+      user_id: "@bob:tacita.test",
+      device_id: "DEVICE2",
+    });
+
+    await initSession(config);
+
+    expect(createClient).toHaveBeenCalledWith(
+      expect.objectContaining({ accessToken: "syt_access", deviceId: "DEVICE1" }),
+    );
+    expect(client.logout).toHaveBeenCalledOnce();
+  });
+
+  it("ne touche à rien quand le compte précédent est un autre", async () => {
+    await initSession(config);
+    // Un second client neuf : le mock verrouille la crypto du premier, comme le vrai.
+    ({ crypto, client } = resetSdk());
+    client.loginRequest.mockResolvedValueOnce({
+      access_token: "syt_alice",
+      user_id: "@alice:tacita.test",
+      device_id: "DEVICE2",
+    });
+
+    await initSession(config);
+    expect(client.logout).not.toHaveBeenCalled();
+  });
+
+  it("une déconnexion qui échoue ne fait pas échouer la connexion", async () => {
+    await initSession(config);
+    // Un second client neuf : le mock verrouille la crypto du premier, comme le vrai.
+    ({ crypto, client } = resetSdk());
+    client.loginRequest.mockResolvedValueOnce({
+      access_token: "syt_neuf",
+      user_id: "@bob:tacita.test",
+      device_id: "DEVICE2",
+    });
+    client.logout.mockRejectedValueOnce(new Error("M_UNKNOWN_TOKEN"));
+
+    await expect(initSession(config)).resolves.toBeDefined();
+  });
+});
