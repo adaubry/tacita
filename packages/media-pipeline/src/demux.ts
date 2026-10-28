@@ -129,6 +129,18 @@ export function contientIdr(donnees: Uint8Array, tailleLongueur: number): boolea
   return false;
 }
 
+/**
+ * La durée que les images couvrent : de la première à la dernière présentée, plus
+ * l'intervalle moyen pour la dernière. Une seule image, ou aucune, ne dit rien d'une durée.
+ */
+function dureeDesImages(echantillons: EchantillonVideo[]): number {
+  if (echantillons.length < 2) return 0;
+  const instants = echantillons.map((echantillon) => echantillon.timestampUs);
+  const etendue = Math.max(...instants) - Math.min(...instants);
+  const intervalle = etendue / (echantillons.length - 1);
+  return Math.round((etendue + intervalle) / 1000);
+}
+
 function boiteDe(
   fichier: ISOFile,
   pisteId: number,
@@ -268,7 +280,15 @@ export async function lireMp4(octets: Bytes): Promise<SourceVideo> {
       fichier.start();
       fichier.flush();
 
-      const dureeMs = Math.round((info.duration / info.timescale) * 1000);
+      /*
+       * **La durée de l'en-tête, ou celle des images.** Un MP4 fragmenté — l'enregistrement
+       * de Safari — annonce souvent 0 dans `mvhd` : les images sont dans les fragments, et
+       * l'en-tête a été écrit avant elles. Prise telle quelle, cette durée nulle donnait un
+       * débit nul, et un film d'iPhone pourtant au bon poids ne prenait jamais le chemin
+       * rapide (mesuré sur iPhone : il retombait sur le décodeur de Safari, qui le refuse).
+       */
+      const dureeEnTete = info.timescale > 0 ? Math.round((info.duration / info.timescale) * 1000) : 0;
+      const dureeMs = dureeEnTete > 0 ? dureeEnTete : dureeDesImages(echantillons);
       const octetsUtiles = echantillons.reduce((somme, e) => somme + e.donnees.length, 0);
 
       resolve({

@@ -84,6 +84,23 @@ describe("démuxage : ce qu'une bibliothèque indépendante lit de notre contene
   });
 });
 
+describe("la durée se lit sur les images quand l'en-tête n'en dit rien", () => {
+  it("un `mvhd` à durée nulle — le MP4 fragmenté de Safari — garde sa durée et son débit", async () => {
+    const fichier = ecrireMp4({ largeur: 640, hauteur: 360, description: DESCRIPTION, echantillons: echantillons() });
+    // `mvhd` v0 : type, version+drapeaux, création, modification, échelle, **durée**.
+    const type = [...fichier].findIndex(
+      (_octet, rang) => String.fromCharCode(...fichier.slice(rang, rang + 4)) === "mvhd",
+    );
+    fichier.set([0, 0, 0, 0], type + 20);
+
+    const source = await lireMp4(fichier);
+    // 30 images à 33,3 ms : une seconde, et le débit qui en découle — non nul, donc le
+    // chemin rapide redevient possible.
+    expect(source.dureeMs).toBe(1000);
+    expect(source.debitBps).toBe(30 * 24 * 8);
+  });
+});
+
 describe("l'image clé se lit dans le flux, pas seulement dans le conteneur", () => {
   /** Échantillons AVCC : longueur sur 4 octets, puis la NAL (type dans les 5 bits bas). */
   const nal = (type: number) => [0, 0, 0, 3, type, 0x88, 0x84];
