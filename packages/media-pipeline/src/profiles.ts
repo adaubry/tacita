@@ -80,21 +80,31 @@ export const CODECS_H264 = ["avc1.640028", "avc1.4d401f", "avc1.42001f"] as cons
 const MARGE_DEBIT = 1.3;
 
 /**
+ * Au-delà, même à débit sage, on réduit : 1920 de hauteur codée couvre le 1080p dans les
+ * deux sens (paysage 1920 × 1080, portrait 1080 × 1920), et rien au-dessus — une 4K à
+ * 2,5 Mbit/s pèserait peu mais coûterait à décoder chez chaque destinataire.
+ */
+const HAUTEUR_MAX_REMUX = 1920;
+
+/**
  * / E-18 — **le chemin rapide : une source déjà conforme se remuxe, elle ne
  * se réencode pas.**
  *
  * Ce que le prédicat exige, et pourquoi :
  * - **H.264**, parce que c'est ce que notre conteneur sait décrire ;
- * - **hauteur sous le plafond**, parce qu'au-dessus il faut bien réduire ;
- * - **débit sous la cible et sa marge**, même raison ;
+ * - **débit sous la cible et sa marge** : c'est le poids qui fait la cible. Une source
+ *   qui y est déjà ne gagnerait **aucun octet** à être réencodée ; elle y perdrait une
+ *   génération, du temps, de la batterie — et, sur iPhone, l'envoi entier, le décodeur
+ *   WebCodecs de Safari refusant les films de sa propre caméra (« Decoder failure »,
+ *   mesuré sur iPhone) ;
+ * - **hauteur sous 1920**, pas sous la cible : le film de la caméra in-app est
+ *   enregistré au débit de la cible en 1080p, et le réduire à 720p ne l'allégeait pas ;
  * - **au plus deux pistes** : une vidéo, éventuellement du son. Au-delà — angles
  *   multiples, sous-titres, piste de timecode — la source n'est pas ordinaire, et la
  *   remuxer perdrait sans le dire ce que le conteneur ne sait pas porter.
  *
- * Le son d'une source à deux pistes **est** perdu, sur ce chemin comme sur celui du
- * réencodage : le muxeur n'écrit qu'une piste tant que n'est pas livrée. Ce
- * n'est donc pas une régression du chemin rapide, c'est la lacune du muxeur — et elle est
- * la même des deux côtés.
+ * Le son AAC est recopié tel quel par le muxeur, sur ce chemin comme sur celui du
+ * réencodage.
  */
 export function remuxable(
   source: { codec: string; hauteur: number; debitBps: number; pistes: number },
@@ -103,7 +113,7 @@ export function remuxable(
   return (
     source.codec.startsWith("avc1") &&
     source.hauteur > 0 &&
-    source.hauteur <= cibles.height &&
+    source.hauteur <= HAUTEUR_MAX_REMUX &&
     source.debitBps > 0 &&
     source.debitBps <= cibles.bitrate * MARGE_DEBIT &&
     source.pistes <= 2
