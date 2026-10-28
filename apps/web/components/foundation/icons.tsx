@@ -227,6 +227,16 @@ export const IconeFermer: ReactNode = (
   </svg>
 );
 
+/** Passer de la caméra arrière à la caméra avant : deux flèches qui tournent l'une vers l'autre. */
+export const IconeRetournerCamera: ReactNode = (
+  <svg {...trait}>
+    <path d="M4.5 12a7.5 7.5 0 0 1 13-5.1" />
+    <path d="M18 3.5v3.6h-3.6" />
+    <path d="M19.5 12a7.5 7.5 0 0 1-13 5.1" />
+    <path d="M6 20.5v-3.6h3.6" />
+  </svg>
+);
+
 /** Annuler un vocal en cours : le geste d'Instagram, donc la poubelle d'Instagram. */
 export const IconePoubelle: ReactNode = (
   <svg {...trait}>
