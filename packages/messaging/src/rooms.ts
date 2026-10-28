@@ -122,6 +122,20 @@ export function memberCount(session: Session, roomId: string): number {
   return session.client.getRoom(roomId)?.getJoinedMemberCount() ?? 0;
 }
 
+/**
+ * **Les invitations en attente de ce salon.**
+ *
+ * `memberCount` ne compte que ceux qui ont rejoint — c'est la vérité du protocole, et
+ * c'est bien ce qu'il doit rendre. Mais un groupe qu'on vient de créer n'affichait
+ * alors que « 1 membre », soi, alors qu'on venait d'y inviter deux personnes : exact,
+ * et incompréhensible. Ce second compte est ce qui manque pour le dire en entier.
+ */
+export function invitedCount(session: Session, roomId: string): number {
+  return (
+    session.client.getRoom(roomId)?.getMembersWithMembership(KnownMembership.Invite).length ?? 0
+  );
+}
+
 export function members(session: Session, roomId: string): RoomMember[] {
   return session.client.getRoom(roomId)?.getJoinedMembers() ?? [];
 }

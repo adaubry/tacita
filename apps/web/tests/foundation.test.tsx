@@ -559,4 +559,19 @@ describe("l'accord du compteur de membres", () => {
     // Zéro prend le singulier en français — « 0 membre ».
     expect(compteurMembres(0)).toBe("0 membre");
   });
+
+  /**
+   * Matrix ne compte comme membre que celui qui a **rejoint**. Un groupe qu'on vient de
+   * créer annonçait donc « 1 membre », soi, alors qu'on venait d'inviter deux personnes :
+   * exact, et incompréhensible — on croit que l'invitation a échoué.
+   */
+  it("les invitations en attente se disent, et ne se fondent pas dans le total", () => {
+    expect(compteurMembres(1, 2)).toBe("1 membre, 2 invitations en attente");
+    expect(compteurMembres(3, 1)).toBe("3 membres, 1 invitation en attente");
+    // Annoncer « 3 membres » quand deux n'ont rien accepté serait une promesse non
+    // tenue affichée (interdit n°13) : les deux nombres restent distincts.
+    expect(compteurMembres(1, 2)).not.toContain("3");
+    // Personne en attente : la phrase ne s'allonge pas pour rien.
+    expect(compteurMembres(4, 0)).toBe("4 membres");
+  });
 });

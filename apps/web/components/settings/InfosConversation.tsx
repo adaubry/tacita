@@ -14,6 +14,7 @@ import {
   identifiantComplet,
   invite,
   leaveConversation,
+  invitedCount,
   memberCount,
   messages as listerMessages,
   roomNotificationLevel,
@@ -172,7 +173,10 @@ export function InfosConversation({ roomId }: { roomId: string }) {
         <Text type="supporting" color="secondary" hasTabularNumbers>
           {direct
             ? (salon?.peerId ?? "")
-            : compteurMembres(session ? memberCount(session, roomId) : 0)}
+            : compteurMembres(
+                session ? memberCount(session, roomId) : 0,
+                session ? invitedCount(session, roomId) : 0,
+              )}
         </Text>
       </div>
 

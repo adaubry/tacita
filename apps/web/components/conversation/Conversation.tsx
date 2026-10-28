@@ -25,6 +25,7 @@ import {
   createTypingIndicator,
   edit,
   getPinnedEvents,
+  invitedCount,
   memberCount,
   members,
   mentionCandidates,
@@ -621,7 +622,10 @@ export function Conversation({ roomId }: { roomId: string }) {
                 salon?.direct
                   ? // l'identifiant sans son domaine, identique pour tous.
                     (salon.peerId ? identifiantCourt(salon.peerId) : "")
-                  : compteurMembres(session ? memberCount(session, roomId) : 0)
+                  : compteurMembres(
+                      session ? memberCount(session, roomId) : 0,
+                      session ? invitedCount(session, roomId) : 0,
+                    )
               }
               direct={salon?.direct ?? false}
             />
