@@ -769,6 +769,26 @@ describe("typing en lecture, mentions à la saisie", () => {
     expect(screen.getByText(/2 personnes/)).toBeTruthy();
   });
 
+  it("réglage actif : le champ garde le focus après l'envoi, le clavier reste", () => {
+    const { onEnvoyer } = rendreComposer({ garderClavier: true });
+    const champ = screen.getAllByLabelText("Message")[0]!;
+    fireEvent.input(champ, { target: { textContent: "salut" } });
+
+    const envoyer = screen.getByRole("button", { name: "Envoyer" });
+    // Le focus ne quitte pas le champ au toucher…
+    expect(fireEvent.mouseDown(envoyer)).toBe(false);
+    fireEvent.click(envoyer);
+    expect(onEnvoyer).toHaveBeenCalledWith("salut");
+    // … et lui est rendu si iOS l'a pris quand même.
+    expect(champ.contains(document.activeElement)).toBe(true);
+  });
+
+  it("réglage inactif : le toucher d'envoi n'est pas retenu", () => {
+    rendreComposer();
+    fireEvent.input(screen.getAllByLabelText("Message")[0]!, { target: { textContent: "salut" } });
+    expect(fireEvent.mouseDown(screen.getByRole("button", { name: "Envoyer" }))).toBe(true);
+  });
+
   it("personne n'écrit : aucun indicateur, pas une ligne vide", () => {
     rendreComposer();
     expect(screen.queryByText(/en train d'écrire/)).toBeNull();

@@ -178,6 +178,13 @@ export const ecrireDemandePushFaite = (indexedDB: IDBFactory) =>
 export const [lireModeMasque, ecrireModeMasque] = drapeau("mode-masque");
 
 /**
+ * Garder le clavier ouvert après l'envoi d'un message. Les avis sont partagés — d'où un
+ * réglage, et d'appareil : un clavier se règle sur le téléphone qui l'affiche. Le défaut
+ * est `false`, le comportement d'avant le réglage.
+ */
+export const [lireGarderClavier, ecrireGarderClavier] = drapeau("garder-clavier");
+
+/**
  * le fond d'écran d'une conversation, **sur cet appareil**.
  *
  * Non synchronisé, et le libellé de l'écran le dit — un fond retrouvé sur un seul
