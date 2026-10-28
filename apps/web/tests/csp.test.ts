@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildCsp } from "../lib/csp";
+import { lire } from "./sources";
 
 /**
  * Durcissement (pas de REQ de spec : à rattacher à un REQ-UI si le PM veut le tracer).
@@ -57,6 +58,19 @@ describe("Durcissement CSP — contenir une XSS : ni script étranger, ni exfilt
     });
     // L'origine, jamais l'URL : un chemin dans une directive CSP ne veut rien dire ici.
     expect(local).toContain("connect-src 'self' https://chat.spleen.blog;");
+  });
+
+  it("le chiffrement en WebAssembly peut se compiler en production, sans ouvrir `eval`", () => {
+    const script = directive("script-src")!;
+    expect(script).toContain("'wasm-unsafe-eval'");
+    expect(script.split(" ")).not.toContain("'unsafe-eval'");
+  });
+
+  it("chaque page est rendue à la requête : une page pré-rendue n'aurait aucun nonce", () => {
+    // Avec 'strict-dynamic', un script sans nonce ne s'exécute pas, 'self' compris. Le
+    // build de production pré-rendait les dix routes : 45 scripts, zéro nonce.
+    const layout = lire("app/layout.tsx");
+    expect(layout).toContain("await headers();");
   });
 
   it("'unsafe-eval' n'existe qu'en dev (HMR), jamais dans la CSP servie en production", () => {

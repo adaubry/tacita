@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 
 // `tokens.css` en premier, et l'ordre compte : il ouvre par la déclaration des couches en
 // cascade, qui n'a d'effet que si elle précède la première feuille qui en utilise une.
@@ -28,7 +29,16 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+/*
+ * **Rendu à la demande, pour que chaque script porte le nonce de la CSP.** Next.js ne pose
+ * le nonce que sur les pages rendues à la requête ; pré-rendues au build, elles servaient
+ * 45 scripts sans nonce, et `'strict-dynamic'` — qui ignore `'self'` — les aurait tous
+ * bloqués : une app blanche (mesuré sur le build de production). Lire `headers()` suffit
+ * à rendre toute l'arborescence dynamique. Le pré-rendu perdu ne coûte presque rien à une
+ * instance auto-hébergée ; le service worker garde la coquille, HTML et en-têtes ensemble.
+ */
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  await headers();
   return (
     <html lang="fr">
       <body>

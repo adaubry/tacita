@@ -46,9 +46,15 @@ export function buildCsp(
 ): string {
   const elementCallOrigin = new URL(elementCallUrl).origin;
   const homeserverOrigin = new URL(homeserverUrl).origin;
+  /*
+   * `'wasm-unsafe-eval'` : le chiffrement de Matrix (`matrix-sdk-crypto-wasm`) est du
+   * WebAssembly, et sans cette source aucune session ne s'ouvre. Elle n'autorise que la
+   * compilation de WebAssembly, pas `eval` — c'est précisément pour ça qu'elle existe. Le
+   * dev la masquait : son `'unsafe-eval'` couvre aussi le WebAssembly.
+   */
   const script = dev
-    ? `'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-eval'`
-    : `'self' 'nonce-${nonce}' 'strict-dynamic'`;
+    ? `'self' 'nonce-${nonce}' 'strict-dynamic' 'wasm-unsafe-eval' 'unsafe-eval'`
+    : `'self' 'nonce-${nonce}' 'strict-dynamic' 'wasm-unsafe-eval'`;
 
   return [
     `default-src 'self'`,
