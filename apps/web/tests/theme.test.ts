@@ -242,9 +242,10 @@ describe("le thème porte les valeurs de DESIGN.md, et rien d'autre", () => {
    * se termine par une interpolation, qu'aucune analyse de texte ne peut résoudre.
    */
   it("aucune variable CSS inventée : chaque `var(--x)` sans repli désigne un token qui existe", () => {
-    const feuilleAstryx = lire(
-      "../../node_modules/.pnpm/@astryxdesign+core@0.2.0_@s_2f1e5870477c7775a39999df5148aa43/node_modules/@astryxdesign/core/dist/astryx.css",
-    );
+    // Par le lien que pnpm pose dans `apps/web/node_modules`, pas par le magasin : le
+    // nom du dossier du magasin porte un hachage de résolution propre à la machine, et
+    // le chemin écrit en dur ici n'existait pas sur la CI — rouge depuis des mois.
+    const feuilleAstryx = lire("node_modules/@astryxdesign/core/dist/astryx.css");
     const declarees = (source: string) =>
       (source.match(/--[a-zA-Z0-9_-]+(?=\s*:)/g) ?? []).map((nom) => nom.trim());
 
