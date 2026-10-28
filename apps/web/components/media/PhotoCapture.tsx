@@ -70,6 +70,12 @@ const OMBRE_TEXTE = "rgba(0, 0, 0, 0.5)";
 const DELAI_MAINTIEN_MS = 250;
 /** Au-delà, l'enregistrement s'arrête de lui-même. */
 export const DUREE_MAX_FILM_MS = 60_000;
+/** La course du doigt, vers le haut, qui mène du plan large au zoom maximal. */
+const COURSE_ZOOM_PX = 300;
+/** Au-delà de ce facteur, une caméra de téléphone ne rend plus qu'un flou numérique. */
+const ZOOM_MAX = 10;
+const libelleZoom = (valeur: number) => `${valeur.toFixed(1).replace(".", ",")}×`;
+
 /** Le cercle de progression autour du déclencheur. */
 const RAYON_PROGRESSION = 44;
 const TOUR_PROGRESSION = 2 * Math.PI * RAYON_PROGRESSION;
@@ -207,10 +213,12 @@ function cadrageVisible(element: HTMLVideoElement) {
  * `<dialog>` modal qui couvre l'écran — couche supérieure, Échap, focus piégé, le tout
  * fourni par la plateforme —, l'image dessous et les contrôles par-dessus.
  *
- * **La permission est demandée au moment de l'usage**, jamais à l'avance (DESIGN.md), et
- * un refus est expliqué et rattrapable : il n'y a pas d'écran mort.
+ * **Caméra et micro sont demandés à l'ouverture de cet écran**, pas avant : c'est le
+ * moment de l'usage (DESIGN.md). Un refus de caméra est expliqué et rattrapable : il n'y a
+ * pas d'écran mort. Un refus de micro laisse la caméra ouverte.
  *
- * **Toucher prend une photo, maintenir filme** — le geste de Snapchat et d'Instagram.
+ * **Toucher prend une photo, maintenir filme** — le geste de Snapchat et d'Instagram —,
+ * et glisser vers le haut sans lâcher zoome, là où la caméra expose son zoom.
  * La vidéo est enregistrée en MP4 (H.264 + AAC), ce que produit Safari : c'est le format
  * que la chaîne d'envoi sait réduire **en gardant le son**. Là où le navigateur
  * n'enregistre qu'en WebM, que la chaîne ne lit pas, le maintien ne filme pas : mieux
@@ -233,6 +241,13 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
   const minuteurMaintien = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Un film vient de finir au relâcher : le clic qui suit n'est pas une photo. */
   const filmVientDeFinir = useRef(false);
+  /** Le zoom matériel de la caméra, s'il existe ; mesuré à chaque ouverture du flux. */
+  const [zoomPossible, setZoomPossible] = useState<{ min: number; max: number } | null>(null);
+  /** Le facteur affiché pendant le geste ; `null` hors geste. */
+  const [zoom, setZoom] = useState<number | null>(null);
+  const zoomVoulu = useRef(1);
+  const zoomEnVol = useRef(false);
+  const departDoigt = useRef<number | null>(null);
   const [face, setFace] = useState<Face>("environment");
   const [texte, setTexte] = useState<TexteSurPhoto | null>(null);
   /** La saisie en cours ; `null` hors saisie. */
@@ -280,18 +295,37 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
       return;
     }
 
+    // **Une définition demandée.** Sans elle, Safari donne 640 × 480 : la photo
+    // « originale » enregistrée sur l'appareil l'était à peine. `ideal` et non `exact` :
+    // une caméra qui n'atteint pas la cible rend ce qu'elle a, sans échouer.
+    const contraintesVideo = { facingMode: face, width: { ideal: 1920 }, height: { ideal: 1080 } };
+
+    /*
+     * **Caméra et micro sont demandés ensemble, à l'ouverture** (choix de l'utilisateur) :
+     * une seule fois les deux autorisations, plutôt qu'une demande de micro
+     * qui interrompt le premier film. Déjà accordées, le navigateur ne redemande rien.
+     *
+     * Le micro refusé ne ferme pas la caméra : on la redemande seule, et les films
+     * partiront muets — c'est le choix de celui qui filme, pas une panne à lui cacher.
+     */
     void navigator.mediaDevices
-      .getUserMedia({
-        // **Une définition demandée.** Sans elle, Safari donne 640 × 480 : la photo
-        // « originale » enregistrée sur l'appareil l'était à peine. `ideal` et non
-        // `exact` : une caméra qui n'atteint pas la cible rend ce qu'elle a, sans échouer.
-        video: { facingMode: face, width: { ideal: 1920 }, height: { ideal: 1080 } },
-      })
+      .getUserMedia({ video: contraintesVideo, audio: true })
+      .catch(() => navigator.mediaDevices.getUserMedia({ video: contraintesVideo }))
       .then((obtenu) => {
         if (!vivant) return obtenu.getTracks().forEach((piste) => piste.stop());
         ouvert_ = obtenu;
         setFlux(obtenu);
         if (video.current) video.current.srcObject = obtenu;
+
+        // Le zoom matériel, s'il est exposé : on ne le promet pas, on le mesure.
+        const capacites = obtenu.getVideoTracks?.()[0]?.getCapabilities?.() as
+          | { zoom?: { min: number; max: number } }
+          | undefined;
+        const zoom = capacites?.zoom;
+        setZoomPossible(
+          zoom && zoom.max > zoom.min ? { min: zoom.min, max: Math.min(zoom.max, zoom.min * ZOOM_MAX) } : null,
+        );
+        setZoom(null);
       })
       .catch(() => vivant && setRefus("refuse"));
 
@@ -377,30 +411,19 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
   };
 
   /*
-   * **Filmer.** Le micro n'est demandé qu'ici, au premier maintien, jamais à l'ouverture
-   * de la caméra : qui ne fait que des photos n'a pas à l'accorder (DESIGN.md, permission
-   * au moment de l'usage). Refusé, le film part sans son — c'est un choix de celui qui
-   * filme, pas une panne à lui cacher.
+   * **Filmer** : le flux de la caméra tel qu'il est, image et son — le micro a été
+   * demandé avec elle, à l'ouverture. Sans piste de son (micro refusé), le film est muet.
    */
-  const filmer = async () => {
+  const filmer = () => {
     const format = formatVideo();
-    if (!flux || !format) return;
-    const micro = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => undefined);
-    // Relâché pendant la demande de permission : il n'y a plus rien à filmer.
-    if (!doigtPose.current) {
-      micro?.getTracks().forEach((piste) => piste.stop());
-      return;
-    }
-
-    const pistes = new MediaStream([...flux.getVideoTracks(), ...(micro?.getAudioTracks() ?? [])]);
-    const recorder = new MediaRecorder(pistes, { mimeType: format });
+    if (!flux || !format || !doigtPose.current) return;
+    const recorder = new MediaRecorder(flux, { mimeType: format });
     const morceaux: Blob[] = [];
     const debut = Date.now();
     recorder.ondataavailable = (evenement) => {
       if (evenement.data.size > 0) morceaux.push(evenement.data);
     };
     recorder.onstop = () => {
-      micro?.getTracks().forEach((piste) => piste.stop());
       enregistreur.current = null;
       setFilm(null);
       // Le type seul, sans `;codecs=…` : c'est lui que la chaîne d'envoi et les
@@ -433,22 +456,64 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
    * de la photo — c'est aussi celui du clavier. Le maintien arme un délai ; s'il s'écoule
    * doigt posé, on filme, et le relâcher arrête. Le clic qui suit un film est avalé.
    */
+  /*
+   * **Le zoom suit le doigt qui monte**, comme sur Snapchat : glisser vers le haut sans
+   * lâcher le déclencheur. C'est le zoom de la caméra elle-même, donc il vaut pour le film
+   * — là où le navigateur ne l'expose pas, le geste ne fait rien plutôt qu'un zoom
+   * d'aperçu que le film n'aurait pas.
+   *
+   * Un seul `applyConstraints` à la fois : le doigt bouge plus vite que la caméra ne
+   * répond, et seule la dernière valeur compte.
+   */
+  const appliquerZoom = (valeur: number) => {
+    zoomVoulu.current = valeur;
+    setZoom(valeur);
+    if (zoomEnVol.current) return;
+    const piste = flux?.getVideoTracks()[0];
+    if (!piste) return;
+    zoomEnVol.current = true;
+    const suivant = () => {
+      const cible = zoomVoulu.current;
+      void piste
+        .applyConstraints({ advanced: [{ zoom: cible } as MediaTrackConstraintSet] })
+        .catch(() => {})
+        .finally(() => {
+          if (zoomVoulu.current !== cible) suivant();
+          else zoomEnVol.current = false;
+        });
+    };
+    suivant();
+  };
+
   const gestesDeclencheur = {
     onPointerDown(evenement: PointerEvent<HTMLButtonElement>) {
       doigtPose.current = true;
+      departDoigt.current = evenement.clientY;
       if (!formatVideo()) return;
       // Le doigt qui glisse hors du déclencheur pendant le film le relâche quand même ici :
       // sans capture, le relâcher partait ailleurs et le film courait jusqu'à la minute.
       evenement.currentTarget.setPointerCapture?.(evenement.pointerId);
-      minuteurMaintien.current = setTimeout(() => void filmer(), DELAI_MAINTIEN_MS);
+      minuteurMaintien.current = setTimeout(filmer, DELAI_MAINTIEN_MS);
+    },
+    onPointerMove(evenement: PointerEvent<HTMLButtonElement>) {
+      if (!doigtPose.current || !zoomPossible || departDoigt.current === null) return;
+      const montee = Math.max(departDoigt.current - evenement.clientY, 0);
+      const { min, max } = zoomPossible;
+      appliquerZoom(Math.min(min + (montee / COURSE_ZOOM_PX) * (max - min), max));
     },
     onPointerUp() {
       doigtPose.current = false;
+      departDoigt.current = null;
       if (minuteurMaintien.current) clearTimeout(minuteurMaintien.current);
       minuteurMaintien.current = null;
       if (enregistreur.current && enregistreur.current.state !== "inactive") {
         filmVientDeFinir.current = true;
         enregistreur.current.stop();
+      }
+      // Le prochain cadrage repart du plan large.
+      if (zoomPossible && zoom !== null) {
+        appliquerZoom(zoomPossible.min);
+        setZoom(null);
       }
     },
   };
@@ -687,7 +752,9 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
                 <>
                   {film && (
                     <Text type="label" hasTabularNumbers>
-                      {dureeFilm(film.ecoule)}
+                      {zoom !== null && zoomPossible && zoom > zoomPossible.min
+                        ? `${dureeFilm(film.ecoule)} · ${libelleZoom(zoom / zoomPossible.min)}`
+                        : dureeFilm(film.ecoule)}
                     </Text>
                   )}
                   <div style={{ display: "grid", placeItems: "center" }}>
