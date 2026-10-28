@@ -223,9 +223,16 @@ export function VoicePlayer({ source, dureeMs, ondes = [] }: VoicePlayerProps) {
         ))}
       </div>
 
-      <Text type="supporting" color="secondary" hasTabularNumbers>
-        {dureeLisible(restant)}
-      </Text>
+      {/*
+       * Le temps ne cède jamais : `body` pose `overflow-wrap: anywhere`, qui compte dans la
+       * largeur minimale — la colonne pouvait donc se réduire à un caractère, et « 0:03 »
+       * s'écrivait sur deux lignes. C'est la forme d'onde qui rétrécit, pas lui.
+       */}
+      <div style={{ flexShrink: 0, whiteSpace: "nowrap" }}>
+        <Text type="supporting" color="secondary" hasTabularNumbers>
+          {dureeLisible(restant)}
+        </Text>
+      </div>
 
       {/* La vitesse n'a de sens qu'une fois le vocal lancé : avant, elle prendrait la
           place de la forme d'onde pour une question que personne ne se pose encore. */}
