@@ -700,6 +700,47 @@ describe("capture : « sur votre appareil » et « envoyé » ne se confondent p
       pointeur("pointerup", 200);
     });
 
+    it("glisser jusqu'à la croix puis relâcher jette le film, et la caméra reste", async () => {
+      render(<PhotoCapture ouvert onFermer={vi.fn()} onEnregistrer={vi.fn()} onEnvoyer={vi.fn()} />);
+      await attendreFlux();
+      const glisser = (type: string, clientX: number) =>
+        fireEvent(declencheur(), new MouseEvent(type, { bubbles: true, clientX, clientY: 500 }));
+
+      glisser("pointerdown", 200);
+      await screen.findByText("0:00", undefined, { timeout: 1000 });
+      // La croix du haut, hors d'atteinte du pouce, n'est plus là ; celle d'à côté, si.
+      expect(screen.queryByRole("button", { name: "Fermer la caméra" })).toBeNull();
+      expect(screen.getByRole("button", { name: "Annuler la vidéo" })).toBeTruthy();
+      expect(screen.getByText("Glissez vers la croix pour annuler")).toBeTruthy();
+
+      // Un pouce qui roule de quelques pixels n'arme rien ; 100 px vers la gauche, si.
+      glisser("pointermove", 180);
+      expect(screen.getByText("Glissez vers la croix pour annuler")).toBeTruthy();
+      glisser("pointermove", 100);
+      expect(screen.getByText("Relâchez pour annuler")).toBeTruthy();
+
+      glisser("pointerup", 100);
+      fireEvent.click(declencheur());
+      await waitFor(() => expect(screen.queryByText("0:00")).toBeNull());
+      expect(screen.queryByLabelText("Vidéo filmée")).toBeNull();
+      // Le clic qui suit le relâcher n'a pas pris de photo non plus.
+      expect(screen.queryByAltText("Photo prise")).toBeNull();
+      expect(screen.getByLabelText("Aperçu de la caméra")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Fermer la caméra" })).toBeTruthy();
+    });
+
+    it("la croix d'annulation est un vrai bouton : cliquée, elle jette le film", async () => {
+      render(<PhotoCapture ouvert onFermer={vi.fn()} onEnregistrer={vi.fn()} onEnvoyer={vi.fn()} />);
+      await attendreFlux();
+      pointeur("pointerdown");
+      await screen.findByText("0:00", undefined, { timeout: 1000 });
+
+      fireEvent.click(screen.getByRole("button", { name: "Annuler la vidéo" }));
+      await waitFor(() => expect(screen.queryByText("0:00")).toBeNull());
+      expect(screen.queryByLabelText("Vidéo filmée")).toBeNull();
+      pointeur("pointerup");
+    });
+
     it("touché sans maintien, il photographie et ne filme pas", async () => {
       render(<PhotoCapture ouvert onFermer={vi.fn()} onEnregistrer={vi.fn()} onEnvoyer={vi.fn()} />);
       await attendreFlux();

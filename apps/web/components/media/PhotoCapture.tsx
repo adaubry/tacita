@@ -248,6 +248,12 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
   const zoomVoulu = useRef(1);
   const zoomEnVol = useRef(false);
   const departDoigt = useRef<number | null>(null);
+  /** Le doigt a assez glissé vers la croix : le relâcher jettera le film. */
+  const [annulationArmee, setAnnulationArmee] = useState(false);
+  const annulationArmeeRef = useRef(false);
+  const origineX = useRef(0);
+  /** Lu par `onstop`, qui ne sait pas pourquoi l'enregistrement s'arrête. */
+  const jeterFilm = useRef(false);
   const [face, setFace] = useState<Face>("environment");
   const [texte, setTexte] = useState<TexteSurPhoto | null>(null);
   /** La saisie en cours ; `null` hors saisie. */
@@ -426,6 +432,13 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
     recorder.onstop = () => {
       enregistreur.current = null;
       setFilm(null);
+      annulationArmeeRef.current = false;
+      setAnnulationArmee(false);
+      // Annulé : le film ne devient pas une prise, et la caméra reste ouverte.
+      if (jeterFilm.current) {
+        jeterFilm.current = false;
+        return;
+      }
       // Le type seul, sans `;codecs=…` : c'est lui que la chaîne d'envoi et les
       // correspondants comparent, et l'enregistreur rend le format complet.
       const blob = new Blob(morceaux, { type: (recorder.mimeType || "video/mp4").split(";")[0] });
@@ -485,10 +498,29 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
     suivant();
   };
 
+  /** Arrête le film sans le garder : la croix, au doigt comme au clavier. */
+  const annulerFilm = () => {
+    const recorder = enregistreur.current;
+    if (!recorder || recorder.state === "inactive") return;
+    jeterFilm.current = true;
+    filmVientDeFinir.current = doigtPose.current;
+    recorder.stop();
+  };
+
+  /**
+   * La course vers la croix, celle du vocal : en deçà, un pouce qui roule de quelques
+   * pixels en tenant le déclencheur n'annule rien. La verticale n'y entre pas — elle
+   * appartient au zoom.
+   */
+  const COURSE_ANNULATION = 72;
+
   const gestesDeclencheur = {
     onPointerDown(evenement: PointerEvent<HTMLButtonElement>) {
       doigtPose.current = true;
       departDoigt.current = evenement.clientY;
+      origineX.current = evenement.clientX;
+      annulationArmeeRef.current = false;
+      setAnnulationArmee(false);
       if (!formatVideo()) return;
       // Le doigt qui glisse hors du déclencheur pendant le film le relâche quand même ici :
       // sans capture, le relâcher partait ailleurs et le film courait jusqu'à la minute.
@@ -496,7 +528,15 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
       minuteurMaintien.current = setTimeout(filmer, DELAI_MAINTIEN_MS);
     },
     onPointerMove(evenement: PointerEvent<HTMLButtonElement>) {
-      if (!doigtPose.current || !zoomPossible || departDoigt.current === null) return;
+      if (!doigtPose.current) return;
+      if (enregistreur.current) {
+        const armee = origineX.current - evenement.clientX >= COURSE_ANNULATION;
+        if (armee !== annulationArmeeRef.current) {
+          annulationArmeeRef.current = armee;
+          setAnnulationArmee(armee);
+        }
+      }
+      if (!zoomPossible || departDoigt.current === null) return;
       const montee = Math.max(departDoigt.current - evenement.clientY, 0);
       const { min, max } = zoomPossible;
       appliquerZoom(Math.min(min + (montee / COURSE_ZOOM_PX) * (max - min), max));
@@ -508,6 +548,7 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
       minuteurMaintien.current = null;
       if (enregistreur.current && enregistreur.current.state !== "inactive") {
         filmVientDeFinir.current = true;
+        jeterFilm.current = annulationArmeeRef.current;
         enregistreur.current.stop();
       }
       // Le prochain cadrage repart du plan large.
@@ -682,14 +723,18 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
                 }}
               />
             ) : (
-              <Button
-                label="Fermer la caméra"
-                variant="ghost"
-                isIconOnly
-                icon={IconeFermer}
-                className="tacita-retour"
-                onClick={onFermer}
-              />
+              // Pendant un film, la sortie est à côté du pouce (voir le déclencheur) : une
+              // croix en haut, hors d'atteinte du doigt qui tient, ne servait à rien.
+              !film && (
+                <Button
+                  label="Fermer la caméra"
+                  variant="ghost"
+                  isIconOnly
+                  icon={IconeFermer}
+                  className="tacita-retour"
+                  onClick={onFermer}
+                />
+              )
             )}
             {prise && !prise.video && saisie === null && (
               <Button
@@ -751,13 +796,47 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
                  */
                 <>
                   {film && (
-                    <Text type="label" hasTabularNumbers>
-                      {zoom !== null && zoomPossible && zoom > zoomPossible.min
-                        ? `${dureeFilm(film.ecoule)} · ${libelleZoom(zoom / zoomPossible.min)}`
-                        : dureeFilm(film.ecoule)}
-                    </Text>
+                    <>
+                      <Text type="label" hasTabularNumbers>
+                        {zoom !== null && zoomPossible && zoom > zoomPossible.min
+                          ? `${dureeFilm(film.ecoule)} · ${libelleZoom(zoom / zoomPossible.min)}`
+                          : dureeFilm(film.ecoule)}
+                      </Text>
+                      {/* Le seul retour possible pendant que le doigt masque la croix. */}
+                      <Text type="supporting">
+                        {annulationArmee ? "Relâchez pour annuler" : "Glissez vers la croix pour annuler"}
+                      </Text>
+                    </>
                   )}
-                  <div style={{ display: "grid", placeItems: "center" }}>
+                  {/*
+                   * Trois colonnes, le déclencheur au centre : la croix d'annulation se pose à
+                   * sa gauche, là où le pouce la trouve sans lâcher — le geste de la poubelle du
+                   * vocal. Elle reste un vrai bouton : au clavier, annuler ne peut pas dépendre
+                   * d'un glissement.
+                   */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr auto 1fr",
+                      alignItems: "center",
+                      width: "100%",
+                    }}
+                  >
+                    <div style={{ justifySelf: "end", marginInlineEnd: "var(--spacing-6)" }}>
+                      {film && (
+                        <Button
+                          label="Annuler la vidéo"
+                          variant={annulationArmee ? "destructive" : "ghost"}
+                          isIconOnly
+                          icon={IconeFermer}
+                          // Armée, la croix perd son verre pour prendre la couleur du
+                          // destructif : `.tacita-retour` l'emporterait sinon.
+                          className={annulationArmee ? undefined : "tacita-retour"}
+                          onClick={annulerFilm}
+                        />
+                      )}
+                    </div>
+                    <div style={{ display: "grid", placeItems: "center" }}>
                     <button
                       type="button"
                       aria-label="Prendre la photo"
@@ -796,6 +875,8 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
                         />
                       </svg>
                     )}
+                    </div>
+                    <div />
                   </div>
                 </>
               )}
