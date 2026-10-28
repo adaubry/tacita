@@ -290,7 +290,12 @@ self.addEventListener("push", (event) => {
 
   event.waitUntil(
     Promise.all([demanderApercu(roomId, charge.event_id).catch(() => null), appliAuPremierPlan()])
-      .then(([apercu, premierPlan]) => {
+      .then(([reponse, clientVisible]) => {
+        // La page répond `{ expediteur, texte, visible }`, ou `{ visible }` sans aperçu.
+        // Elle sait seule à coup sûr si elle est à l'écran : sa réponse prime, le
+        // `visibilityState` du client reste le repli.
+        const apercu = reponse && reponse.texte ? reponse : null;
+        const premierPlan = (reponse && reponse.visible === true) || clientVisible;
         // clés absentes, événement pas encore synchronisé, aucune fenêtre
         // ouverte : notification **générique**, sans contenu et sans erreur bruyante.
         const titre = apercu ? apercu.expediteur : titreDeRepli(charge);

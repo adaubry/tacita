@@ -197,7 +197,8 @@ describe("abonnement Web Push, réveil, déchiffrement local, notification", () 
     } as unknown as MessageEvent;
 
     for (const ecouteur of serviceWorker.ecouteurs) ecouteur(evenement);
-    expect(reponses).toEqual([{ expediteur: "mira", texte: "on se voit demain ?" }]);
+    // `visible` : jsdom se dit à l'écran, et la page le rapporte avec l'aperçu.
+    expect(reponses).toEqual([{ expediteur: "mira", texte: "on se voit demain ?", visible: true }]);
   });
 
   it("ne demande jamais la permission au premier lancement — seulement après un message", async () => {
@@ -596,6 +597,17 @@ describe("le service worker n'écrit rien, ne journalise rien, ne devine rien", 
     expect(sw.notifications).toHaveLength(1);
     expect(sw.notifications[0]!.options.silent).toBe(true);
     expect(sw.notifications[0]!.close).toHaveBeenCalled();
+  });
+
+  it("la page dit qu'elle est à l'écran : elle l'emporte sur le client vu du worker", async () => {
+    // Sur iOS, le `visibilityState` du client ne suffisait pas : la page, elle, sait.
+    const sw = chargerServiceWorker();
+    sw.fenetresOuvertes([{ ...fenetreQuiRepond({ visible: true }), visibilityState: "hidden" }]);
+
+    await pousser(sw, { event_id: EVENEMENT, room_id: SALON });
+    expect(sw.notifications[0]!.close).toHaveBeenCalled();
+    // Sans aperçu, le titre retombe sur le repli : `{ visible }` n'est pas un aperçu.
+    expect(sw.notifications[0]!.titre).toBe("Nouveau message");
   });
 
   it("app en arrière-plan : la notification reste", async () => {
