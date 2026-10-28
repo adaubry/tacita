@@ -569,7 +569,7 @@ describe("capture : « sur votre appareil » et « envoyé » ne se confondent p
       ondataavailable: ((evenement: { data: Blob }) => void) | null = null;
       onstop: (() => void) | null = null;
       constructor(
-        public pistes: { pistes: unknown[] },
+        public flux: unknown,
         options: { mimeType: string },
       ) {
         this.mimeType = options.mimeType;
@@ -585,25 +585,33 @@ describe("capture : « sur votre appareil » et « envoyé » ne se confondent p
       }
     }
 
-    const pisteVideo = { kind: "video", stop: vi.fn() };
-    const pisteAudio = { kind: "audio", stop: vi.fn() };
+    let pisteVideo: {
+      stop: ReturnType<typeof vi.fn>;
+      getCapabilities: () => unknown;
+      applyConstraints: ReturnType<typeof vi.fn>;
+    };
+    const pisteAudio = { stop: vi.fn() };
     let getUserMedia: ReturnType<typeof vi.fn>;
+    /** Le flux rendu par le dernier appel réussi : c'est lui que l'enregistreur doit recevoir. */
+    let dernierFlux: unknown;
+
+    const fluxDe = (contraintes: MediaStreamConstraints) => {
+      const pistes = contraintes.audio ? [pisteVideo, pisteAudio] : [pisteVideo];
+      dernierFlux = {
+        getTracks: () => pistes,
+        getVideoTracks: () => [pisteVideo],
+        getAudioTracks: () => (contraintes.audio ? [pisteAudio] : []),
+      };
+      return dernierFlux;
+    };
 
     beforeEach(() => {
       FauxEnregistreur.instances = [];
+      FauxEnregistreur.isTypeSupported = (format: string) => format.startsWith("video/mp4");
       vi.stubGlobal("MediaRecorder", FauxEnregistreur);
-      vi.stubGlobal(
-        "MediaStream",
-        class {
-          constructor(public pistes: unknown[]) {}
-        },
-      );
       vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
-      getUserMedia = vi.fn(async (contraintes: MediaStreamConstraints) =>
-        contraintes.audio
-          ? { getTracks: () => [pisteAudio], getAudioTracks: () => [pisteAudio] }
-          : { getTracks: () => [pisteVideo], getVideoTracks: () => [pisteVideo] },
-      );
+      pisteVideo = { stop: vi.fn(), getCapabilities: () => ({}), applyConstraints: vi.fn(async () => {}) };
+      getUserMedia = vi.fn(async (contraintes: MediaStreamConstraints) => fluxDe(contraintes));
       Object.defineProperty(globalThis.navigator, "mediaDevices", {
         configurable: true,
         value: { getUserMedia },
@@ -613,11 +621,31 @@ describe("capture : « sur votre appareil » et « envoyé » ne se confondent p
     afterEach(() => vi.unstubAllGlobals());
 
     const declencheur = () => screen.getByRole("button", { name: "Prendre la photo" });
-    const pointeur = (type: string) => fireEvent(declencheur(), new MouseEvent(type, { bubbles: true }));
+    const pointeur = (type: string, clientY = 500) =>
+      fireEvent(declencheur(), new MouseEvent(type, { bubbles: true, clientY }));
     const attendreFlux = () =>
       waitFor(() => expect(declencheur().hasAttribute("disabled")).toBe(false));
 
-    it("maintenu, il filme avec le son ; relâché, la vidéo part en MP4", async () => {
+    it("caméra et micro sont demandés ensemble, dès l'ouverture", async () => {
+      render(<PhotoCapture ouvert onFermer={vi.fn()} onEnregistrer={vi.fn()} onEnvoyer={vi.fn()} />);
+      await attendreFlux();
+      expect(getUserMedia).toHaveBeenCalledOnce();
+      expect(getUserMedia.mock.calls[0]![0]).toMatchObject({ video: { facingMode: "environment" }, audio: true });
+    });
+
+    it("micro refusé, la caméra s'ouvre seule — et le film sera muet", async () => {
+      getUserMedia.mockImplementation(async (contraintes: MediaStreamConstraints) =>
+        contraintes.audio ? Promise.reject(new Error("micro refusé")) : fluxDe(contraintes),
+      );
+      render(<PhotoCapture ouvert onFermer={vi.fn()} onEnregistrer={vi.fn()} onEnvoyer={vi.fn()} />);
+      await attendreFlux();
+
+      expect(getUserMedia).toHaveBeenCalledTimes(2);
+      expect(getUserMedia.mock.calls[1]![0]).not.toHaveProperty("audio");
+      expect(screen.queryByText(/accès à la caméra a été refusé/)).toBeNull();
+    });
+
+    it("maintenu, il filme le flux de la caméra ; relâché, la vidéo part en MP4", async () => {
       const onEnvoyer = vi.fn();
       render(<PhotoCapture ouvert onFermer={vi.fn()} onEnregistrer={vi.fn()} onEnvoyer={onEnvoyer} />);
       await attendreFlux();
@@ -625,16 +653,13 @@ describe("capture : « sur votre appareil » et « envoyé » ne se confondent p
       pointeur("pointerdown");
       // Le temps écoulé s'affiche : le film tourne.
       expect(await screen.findByText("0:00", undefined, { timeout: 1000 })).toBeTruthy();
-      // Le micro n'a été demandé qu'au maintien, pas à l'ouverture.
-      expect(getUserMedia).toHaveBeenLastCalledWith({ audio: true });
       const enregistreur = FauxEnregistreur.instances[0]!;
       expect(enregistreur.mimeType).toMatch(/^video\/mp4/);
-      expect(enregistreur.pistes.pistes).toEqual([pisteVideo, pisteAudio]);
+      // Image et son, du même flux : celui ouvert avec la caméra.
+      expect(enregistreur.flux).toBe(dernierFlux);
 
       pointeur("pointerup");
       expect(await screen.findByLabelText("Vidéo filmée")).toBeTruthy();
-      // Le micro s'éteint avec le film ; la caméra, elle, reste pour « Reprendre ».
-      expect(pisteAudio.stop).toHaveBeenCalled();
       // Pas de texte sur une vidéo.
       expect(screen.queryByRole("button", { name: "Ajouter du texte" })).toBeNull();
 
@@ -643,6 +668,36 @@ describe("capture : « sur votre appareil » et « envoyé » ne se confondent p
       const fichier = onEnvoyer.mock.calls[0]![0] as File;
       expect(fichier.type).toBe("video/mp4");
       expect(fichier.name).toMatch(/^video-.*\.mp4$/);
+    });
+
+    it("glisser vers le haut zoome, et le relâcher revient au plan large", async () => {
+      pisteVideo.getCapabilities = () => ({ zoom: { min: 1, max: 5 } });
+      render(<PhotoCapture ouvert onFermer={vi.fn()} onEnregistrer={vi.fn()} onEnvoyer={vi.fn()} />);
+      await attendreFlux();
+
+      pointeur("pointerdown", 500);
+      await screen.findByText("0:00", undefined, { timeout: 1000 });
+      // 150 px sur une course de 300 : la moitié du chemin de 1× à 5×.
+      pointeur("pointermove", 350);
+      await waitFor(() =>
+        expect(pisteVideo.applyConstraints).toHaveBeenLastCalledWith({ advanced: [{ zoom: 3 }] }),
+      );
+      expect(screen.getByText("0:00 · 3,0×")).toBeTruthy();
+
+      pointeur("pointerup", 350);
+      await waitFor(() =>
+        expect(pisteVideo.applyConstraints).toHaveBeenLastCalledWith({ advanced: [{ zoom: 1 }] }),
+      );
+    });
+
+    it("sans zoom exposé par la caméra, glisser ne fait rien", async () => {
+      render(<PhotoCapture ouvert onFermer={vi.fn()} onEnregistrer={vi.fn()} onEnvoyer={vi.fn()} />);
+      await attendreFlux();
+      pointeur("pointerdown", 500);
+      await screen.findByText("0:00", undefined, { timeout: 1000 });
+      pointeur("pointermove", 200);
+      expect(pisteVideo.applyConstraints).not.toHaveBeenCalled();
+      pointeur("pointerup", 200);
     });
 
     it("touché sans maintien, il photographie et ne filme pas", async () => {
@@ -658,25 +713,6 @@ describe("capture : « sur votre appareil » et « envoyé » ne se confondent p
       expect(FauxEnregistreur.instances).toHaveLength(0);
     });
 
-    it("relâché pendant la demande du micro, il ne filme rien", async () => {
-      let accorder: (micro: unknown) => void = () => {};
-      getUserMedia.mockImplementation(async (contraintes: MediaStreamConstraints) =>
-        contraintes.audio
-          ? new Promise((resoudre) => (accorder = resoudre))
-          : { getTracks: () => [pisteVideo], getVideoTracks: () => [pisteVideo] },
-      );
-      render(<PhotoCapture ouvert onFermer={vi.fn()} onEnregistrer={vi.fn()} onEnvoyer={vi.fn()} />);
-      await attendreFlux();
-
-      pointeur("pointerdown");
-      await waitFor(() => expect(getUserMedia).toHaveBeenLastCalledWith({ audio: true }), { timeout: 1000 });
-      pointeur("pointerup");
-      accorder({ getTracks: () => [pisteAudio], getAudioTracks: () => [pisteAudio] });
-
-      await waitFor(() => expect(pisteAudio.stop).toHaveBeenCalled());
-      expect(FauxEnregistreur.instances).toHaveLength(0);
-    });
-
     it("sans enregistrement MP4 possible, le maintien ne filme pas", async () => {
       FauxEnregistreur.isTypeSupported = () => false;
       render(<PhotoCapture ouvert onFermer={vi.fn()} onEnregistrer={vi.fn()} onEnvoyer={vi.fn()} />);
@@ -684,8 +720,8 @@ describe("capture : « sur votre appareil » et « envoyé » ne se confondent p
 
       pointeur("pointerdown");
       await new Promise((attendre) => setTimeout(attendre, 300));
-      expect(getUserMedia).not.toHaveBeenCalledWith({ audio: true });
-      FauxEnregistreur.isTypeSupported = (format: string) => format.startsWith("video/mp4");
+      expect(FauxEnregistreur.instances).toHaveLength(0);
+      pointeur("pointerup");
     });
   });
 
