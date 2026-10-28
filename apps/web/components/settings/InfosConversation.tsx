@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { contactsDeLaSession } from "../../lib/contacts";
+import { compteurMembres } from "../../lib/identifiants";
 import { NewConversationSheet } from "../accueil/NewConversationSheet";
 import { Confirmation } from "../foundation/Confirmation";
 import { ConversationAvatar } from "../foundation/ConversationAvatar";
@@ -171,7 +172,7 @@ export function InfosConversation({ roomId }: { roomId: string }) {
         <Text type="supporting" color="secondary" hasTabularNumbers>
           {direct
             ? (salon?.peerId ?? "")
-            : `${session ? memberCount(session, roomId) : 0} membres`}
+            : compteurMembres(session ? memberCount(session, roomId) : 0)}
         </Text>
       </div>
 

@@ -19,3 +19,14 @@ export function identifiantCourt(userId: string): string {
   const separateur = userId.indexOf(":");
   return separateur === -1 ? userId : userId.slice(0, separateur);
 }
+
+/**
+ * **« 1 membre », pas « 1 membres ».**
+ *
+ * Vu à l'écran sur un groupe qui venait d'être créé : les invités n'ont pas encore
+ * accepté, le compte vaut 1, et l'accord était faux. Deux écrans l'écrivaient — le début
+ * de conversation et l'écran d'informations —, et deux copies d'une règle de grammaire
+ * divergent au premier qui écrit « membre(s) ».
+ */
+export const compteurMembres = (combien: number) =>
+  `${combien} membre${combien > 1 ? "s" : ""}`;

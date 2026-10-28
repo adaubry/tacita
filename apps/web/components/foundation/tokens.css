@@ -445,6 +445,27 @@ body {
   overflow-wrap: anywhere;
 
   /*
+   * **Rien n'est sélectionnable, sauf le contenu.**
+   *
+   * Signalé sur iPhone : un appui long sur le séparateur de date le surlignait en bleu,
+   * poignées comprises. La date n'est pas du texte qu'on copie — et elle n'était pas
+   * seule : l'heure sous les bulles, le nom de l'auteur, les titres d'en-tête, le
+   * compteur de membres et les libellés de la barre du bas étaient dans le même cas.
+   *
+   * Corriger le séparateur aurait laissé les cinq autres, et le septième naîtrait
+   * sélectionnable. C'est le **défaut du web** qu'il faut renverser : tout y est
+   * sélectionnable, alors qu'une application est l'inverse — son interface ne se copie
+   * pas, son contenu si. Même famille que `box-sizing` et `overflow-wrap` juste autour :
+   * un défaut d'agent utilisateur qui n'a de sens que pour un document.
+   *
+   * La règle ci-dessous rend la sélection à ce qui est du contenu. Deux cas n'en ont pas
+   * besoin : la clé de récupération, qui pose `user-select: all` en ligne — un style
+   * inline l'emporte —, et les champs de saisie, couverts explicitement.
+   */
+  -webkit-user-select: none;
+  user-select: none;
+
+  /*
    * **Les bordures blanches** (30/08/2026, plainte utilisateur). L'agent utilisateur pose
    * `body { margin: 8px }` par défaut, et rien ne le remettait à zéro : le conteneur de
    * `Providers`, qui porte `min-height: 100dvh` et le fond de l'application, était donc
@@ -455,6 +476,27 @@ body {
    * du web qui n'existe pas en jsdom, donc invisible à toute la suite de tests.
    */
   margin: 0;
+}
+
+/*
+ * **Ce qui est du contenu, et le redevient.**
+ *
+ * Le corps d'un message d'abord : c'est la demande même — pouvoir le sélectionner pour le
+ * copier, ou le chercher sur Internet par le menu du système.
+ *
+ * Les champs de saisie ensuite, et ce n'est pas du zèle : `user-select: none` hérité
+ * empêche de poser le curseur au milieu d'un texte déjà tapé sur une partie des
+ * navigateurs. Un composer où l'on ne peut pas se replacer serait un dégât bien plus
+ * grand que celui qu'on répare.
+ *
+ * Enfin l'identifiant Matrix, qu'on recopie pour le transmettre à quelqu'un.
+ */
+input,
+textarea,
+[contenteditable],
+.tacita-selectionnable {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /*

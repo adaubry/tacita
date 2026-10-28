@@ -69,7 +69,9 @@ export function decouperLiens(texte: string): MorceauTexte[] {
  */
 export function TexteMessage({ texte }: { texte: string }) {
   return (
-    <Text type="body">
+    /* L'interface ne se sélectionne pas, le contenu si (`tokens.css`) : c'est ici que la
+       sélection est rendue, parce que c'est ici qu'est le texte de quelqu'un. */
+    <Text type="body" className="tacita-selectionnable">
       {decouperLiens(texte).map((fragment, rang) =>
         fragment.lien ? (
           <a

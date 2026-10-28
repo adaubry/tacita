@@ -271,6 +271,43 @@ describe("le thème porte les valeurs de DESIGN.md, et rien d'autre", () => {
     expect([...inventees]).toEqual([]);
   });
 
+  /**
+   * **L'interface ne se sélectionne pas, le contenu si.**
+   *
+   * Signalé sur iPhone : un appui long sur le séparateur de date le surlignait en bleu.
+   * La date n'était pas seule — l'heure sous les bulles, le nom de l'auteur, les titres
+   * d'en-tête et le compteur de membres étaient dans le même cas, parce que c'est le
+   * défaut du web et qu'il n'avait jamais été renversé.
+   *
+   * Le test lit la feuille, faute de navigateur : jsdom ne calcule aucune sélection. Il
+   * ne prouve donc pas le comportement ; il empêche les deux moitiés de la règle de
+   * disparaître séparément — et c'est la seconde qui compte, puisque la perdre rendrait
+   * un composer dans lequel on ne peut plus replacer son curseur.
+   */
+  it("la sélection est refusée par défaut, et rendue au contenu", () => {
+    const feuille = sansCommentaires(lire("components/foundation/tokens.css"));
+
+    const corps = feuille.match(/\bbody\s*{([^}]*)}/);
+    expect(corps?.[1], "aucune règle sur `body`").toMatch(/user-select:\s*none/);
+
+    const rendue = feuille.match(/([^}]*)\{[^}]*user-select:\s*text/);
+    expect(rendue?.[1], "la sélection n'est rendue à personne").toBeDefined();
+    for (const quoi of ["input", "textarea", "contenteditable", "tacita-selectionnable"]) {
+      expect(rendue?.[1], quoi).toContain(quoi);
+    }
+  });
+
+  /**
+   * L'autre moitié : la classe doit être **posée** quelque part, sinon la règle ci-dessus
+   * est vraie et sans effet — le texte des messages resterait insélectionnable, ce qui
+   * est exactement l'inverse de la demande.
+   */
+  it("le corps d'un message porte la classe qui lui rend la sélection", () => {
+    expect(sansCommentaires(lire("components/conversation/TexteMessage.tsx"))).toContain(
+      "tacita-selectionnable",
+    );
+  });
+
   it("les marges d'agent utilisateur des titres sont neutralisées", () => {
     const feuille = sansCommentaires(lire("components/foundation/tokens.css"));
     const regle = feuille.match(/:where\(([^)]*h1[^)]*)\)\s*{([^}]*)}/);

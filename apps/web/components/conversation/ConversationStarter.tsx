@@ -62,9 +62,16 @@ export function ConversationStarter({
 
       <div>
         {/* `display` (22/600) puis `secondary` (13/400) : la hiérarchie se fait par
-            taille et couleur, jamais par une graisse de plus (DESIGN.md). */}
-        <Text type="display-3">{nom}</Text>
-        <Text type="supporting" color="secondary">
+            taille et couleur, jamais par une graisse de plus (DESIGN.md).
+
+            **`display="block"`, sans quoi les deux se collent sur une ligne** : `Text`
+            se rend en `inline` par défaut, et ce `div` n'impose aucune mise en page. On
+            lisait « FAHHHHHHHHH1 membre » et « adam@adam » — le nom et son sous-titre
+            soudés, sur chaque début de conversation depuis toujours. */}
+        <Text type="display-3" display="block">
+          {nom}
+        </Text>
+        <Text type="supporting" color="secondary" display="block">
           {sousTitre}
         </Text>
       </div>

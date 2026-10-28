@@ -11,6 +11,7 @@ import { Navbar, ONGLETS } from "../components/foundation/Navbar";
 import { Placeholder } from "../components/foundation/Placeholder";
 import { Sheet } from "../components/foundation/Sheet";
 import { SegmentedControl, SegmentedControlItem } from "../components/foundation/primitives";
+import { compteurMembres } from "../lib/identifiants";
 import { RACINE, lire, sansCommentaires, sourcesLivrees } from "./sources";
 import { Skeleton } from "../components/foundation/Skeleton";
 
@@ -546,5 +547,16 @@ describe("la file d'envoi appartient à la session, pas à un écran", () => {
   it("le provider enveloppe les écrans dans le shell", () => {
     const providers = readFileSync(join(RACINE, "app/providers.tsx"), "utf8");
     expect(providers).toMatch(/<OutboxProvider>/);
+  });
+});
+
+describe("l'accord du compteur de membres", () => {
+  it("« 1 membre » au singulier, « 2 membres » au-delà", () => {
+    // Vu sur un groupe fraîchement créé : les invités n'ont pas encore accepté, le
+    // compte vaut 1, et l'écran annonçait « 1 membres ».
+    expect(compteurMembres(1)).toBe("1 membre");
+    expect(compteurMembres(2)).toBe("2 membres");
+    // Zéro prend le singulier en français — « 0 membre ».
+    expect(compteurMembres(0)).toBe("0 membre");
   });
 });

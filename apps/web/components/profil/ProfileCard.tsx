@@ -420,7 +420,9 @@ export function ProfileCard({
         {/* l'identifiant, sans le domaine : il est le même pour tout le
             monde (fédération désactivée) et n'apprend rien à personne. */}
         {userId && (
-          <Text type="supporting" color="secondary">
+          /* Sélectionnable : c'est ce qu'on recopie pour transmettre quelqu'un à
+             quelqu'un d'autre. Le reste de l'interface ne l'est pas (`tokens.css`). */
+          <Text type="supporting" color="secondary" className="tacita-selectionnable">
             {identifiantCourt(userId)}
           </Text>
         )}
