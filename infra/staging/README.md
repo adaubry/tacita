@@ -320,6 +320,14 @@ cd infra && docker compose -f docker-compose.yml -f staging/docker-compose.yml u
 `--build` à chaque fois : les trois images du dépôt (shard, passerelle push, service de
 liens) sont construites localement, et sans le drapeau compose réutilise l'ancienne.
 
+⚠️ **Appels activés (§9) : ajouter `-f rtc/docker-compose.yml` à cette commande, et à toutes
+celles de ce §.** L'overlay remplace deux montages du `proxy` (`well-known.conf`,
+`call.conf`). Sans lui, le `proxy` est recréé avec les fichiers vides de la pile de base :
+le SFU et Element Call tournent toujours, mais le `.well-known` n'annonce plus de focus, et
+**plus aucun appel ne s'établit** — sans une seule erreur dans les logs. Arrivé le
+28/10/2026. L'avertissement « Found orphan containers (element-call, …) » est le signe
+qu'on l'a oublié.
+
 ### c. Vérifier — aucune de ces étapes ne se saute
 
 ```sh
@@ -329,9 +337,12 @@ docker compose -f docker-compose.yml -f staging/docker-compose.yml ps
 # 2. le proxy sert le shard, et l'API Matrix répond
 curl -s -o /dev/null -w 'shard  %{http_code}\n'  https://chat.<domaine>/
 curl -s -o /dev/null -w 'matrix %{http_code}\n'  https://chat.<domaine>/_matrix/client/versions
+
+# 3. appels activés seulement : le focus est annoncé
+curl -s https://chat.<domaine>/.well-known/matrix/client | grep -c rtc_foci
 ```
 
-Attendu : deux `200`. Puis, depuis un client **déjà appairé**, rouvrir
+Attendu : deux `200`, et `1` pour le focus. Puis, depuis un client **déjà appairé**, rouvrir
 `https://chat.<domaine>` : la session reprend sans redemander la clé de récupération —
 c'est la preuve que la clé de signature du homeserver a survécu au déploiement.
 
