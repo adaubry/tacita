@@ -199,7 +199,12 @@ export function VoicePlayer({ source, dureeMs, ondes = [] }: VoicePlayerProps) {
           alignItems: "center",
           justifyContent: "space-between",
           height: HAUTEUR,
-          flex: 1,
+          // La largeur d'avant comme point de départ — 2 px par barre et 2 px entre elles —,
+          // et pas plus : sans elle, la bulle se calait sur la largeur minimale des barres
+          // et le vocal devenait trop étroit pour qu'on y choisisse un endroit. Elle ne
+          // cède que si la bulle n'a pas la place.
+          flex: "1 1 auto",
+          width: Math.max(ondes.length * 4 - 2, 0),
           minWidth: 0,
           touchAction: "pan-y",
         }}
