@@ -265,6 +265,26 @@ button[data-variant="secondary"]:not(#\#):not(#\#):not(#\#):not(#\#) {
 }
 
 /*
+ * **Le bouton d'un `ListItem` cliquable n'est pas remis à zéro par Astryx.** Il enveloppe
+ * le libellé et ne pose que `font`, `color`, `cursor` et `outline` : le reste vient de
+ * l'agent utilisateur. Sur iOS c'est la pilule native — bordure, fond, rembourrage —,
+ * dessinée autour du seul libellé et décalée sous lui, dans chaque `ButtonsList` (menu
+ * d'appui long de l'accueil, entre autres). Signalé le 28/10/2026 sur iPhone ; jsdom
+ * n'applique aucun style d'agent utilisateur, et Chrome de bureau le rend presque
+ * invisible en thème sombre.
+ *
+ * Enfant direct seulement : les vrais boutons posés en tête ou en fin de ligne sont
+ * enveloppés dans un `span`, et gardent leur forme.
+ */
+.astryx-list-item > button {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+/*
  * Le secondaire de la paire. Il reste `ghost` — aucun fond, aucun poids — mais reprend la
  * forme de son voisin : deux pilules côte à côte se lisent comme un seul choix à deux
  * issues, là où une pilule et un libellé nu ne forment plus une paire du tout. La

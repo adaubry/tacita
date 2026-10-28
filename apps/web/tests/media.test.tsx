@@ -283,6 +283,89 @@ describe("pièces jointes : vignettes déchiffrées, tuiles, vocaux", () => {
     expect(screen.getByRole("button", { name: "Lire le message vocal" })).toBeTruthy();
   });
 
+  describe("le lecteur vocal, comme sur Instagram", () => {
+    /** jsdom ne joue rien : `play` et `pause` sont des espions. */
+    const lecteur = () => {
+      const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+      const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+      const { container } = render(
+        <VoicePlayer source="blob:vocal" dureeMs={10_000} ondes={[0, 512, 1024, 256]} />,
+      );
+      const forme = container.querySelector<HTMLElement>("[data-forme-onde]")!;
+      // jsdom ne met rien en page : la forme mesure 200 px à partir de x = 100.
+      forme.getBoundingClientRect = () => ({ left: 100, width: 200 }) as DOMRect;
+      const audio = container.querySelector("audio")!;
+      return { play, pause, forme, audio };
+    };
+    const pointeur = (cible: HTMLElement, type: string, clientX: number) =>
+      fireEvent(cible, new MouseEvent(type, { bubbles: true, clientX }));
+
+    it("toucher le vocal n'importe où le lance, puis le met en pause", () => {
+      const { play, pause } = lecteur();
+      fireEvent.click(screen.getByText(dureeLisible(10_000)));
+      expect(play).toHaveBeenCalledOnce();
+
+      fireEvent.click(screen.getByText(dureeLisible(10_000)));
+      expect(pause).toHaveBeenCalledOnce();
+    });
+
+    it("le bouton bascule une seule fois, pas deux", () => {
+      const { play, pause } = lecteur();
+      fireEvent.click(screen.getByRole("button", { name: "Lire le message vocal" }));
+      expect(play).toHaveBeenCalledOnce();
+      expect(pause).not.toHaveBeenCalled();
+    });
+
+    it("glisser sur la forme d'onde choisit l'endroit, et la lecture reprend de là", () => {
+      const { play, forme, audio } = lecteur();
+      pointeur(forme, "pointerdown", 120);
+      pointeur(forme, "pointermove", 250);
+      pointeur(forme, "pointerup", 250);
+      // Le clic qui suit le relâcher ne doit pas remettre en pause.
+      fireEvent.click(forme);
+
+      // 150 px sur 200 : les trois quarts de 10 s.
+      expect(audio.currentTime).toBeCloseTo(7.5);
+      expect(play).toHaveBeenCalledOnce();
+    });
+
+    it("la recherche ne déclenche pas les gestes de la bulle", () => {
+      // La bulle tient ses gestes en props React (`useGlissement`) : c'est la
+      // propagation React que la forme d'onde arrête.
+      const surBulle = vi.fn();
+      const { container } = render(
+        <div onPointerDown={surBulle} onPointerUp={surBulle}>
+          <VoicePlayer source="blob:vocal" dureeMs={10_000} ondes={[0, 512]} />
+        </div>,
+      );
+      const forme = container.querySelector<HTMLElement>("[data-forme-onde]")!;
+      pointeur(forme, "pointerdown", 120);
+      pointeur(forme, "pointerup", 120);
+      expect(surBulle).not.toHaveBeenCalled();
+    });
+
+    it("la vitesse fait défiler 1×, 1,5×, 2×, et s'applique à l'audio", () => {
+      const { audio } = lecteur();
+      // Avant lecture, pas de pastille : la question ne se pose pas encore.
+      expect(screen.queryByRole("button", { name: /Vitesse/ })).toBeNull();
+
+      fireEvent.click(screen.getByRole("button", { name: "Lire le message vocal" }));
+      const vitesse = () => screen.getByRole("button", { name: /Vitesse/ });
+      expect(vitesse().textContent).toBe("1×");
+
+      fireEvent.click(vitesse());
+      expect(vitesse().textContent).toBe("1,5×");
+      expect(audio.playbackRate).toBe(1.5);
+
+      fireEvent.click(vitesse());
+      expect(vitesse().textContent).toBe("2×");
+      fireEvent.click(vitesse());
+      expect(vitesse().textContent).toBe("1×");
+      // Changer de vitesse ne met pas en pause.
+      expect(screen.getByRole("button", { name: "Pause" })).toBeTruthy();
+    });
+  });
+
   it("les tailles se lisent en unités binaires, comme dans l'OS", () => {
     expect(tailleLisible(512)).toBe("512 o");
     expect(tailleLisible(1536)).toBe("1.5 Ko");
