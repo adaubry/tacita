@@ -3,6 +3,7 @@
 import type { Conversation } from "@tacita/messaging";
 import { useState } from "react";
 
+import { apercuConversation } from "../conversation/message";
 import { ButtonsList } from "../foundation/ButtonsList";
 import { ConversationAvatar } from "../foundation/ConversationAvatar";
 import { cleTeinte, variablesTeinte } from "../foundation/teinte";
@@ -122,8 +123,12 @@ export function ConversationPreview({
             </Text>
             {/* `maxLines` est la troncature d'Astryx : une ligne, ellipse comprise.
                 La recoder en CSS serait recoder la primitive (DESIGN.md). */}
+            {/* `apercuConversation` et non `conversation.preview` : le `body` d'une pièce
+                jointe est son **nom de fichier**, et l'accueil annonçait
+                `vocal-1793145337523.webm`. La phrase dit ce que c'est et dans quel sens
+                ça va — c'est ce qui manquait. */}
             <Text type="supporting" color="secondary" maxLines={1}>
-              {conversation.preview}
+              {apercuConversation(conversation)}
             </Text>
           </div>
 

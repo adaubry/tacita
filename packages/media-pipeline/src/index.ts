@@ -48,7 +48,7 @@ export type { EchantillonVideo, Mp4Options, Rotation } from "./mp4";
 export { lireMp4, rotationDeMatrice } from "./demux";
 export type { SourceVideo } from "./demux";
 export { crc32Ogg, echantillonsOpus, ecrireOggOpus } from "./ogg";
-export { remuxWebmOpusVersOgg, WEBM_OPUS_MIME } from "./remux";
+export { EnregistrementSansSon, remuxWebmOpusVersOgg, WEBM_OPUS_MIME } from "./remux";
 export { lireWebmOpus } from "./webm";
 export type { WebmOpus } from "./webm";
 export { CODECS_H264, detectProfile, PROFILES, remuxable, THUMBNAIL } from "./profiles";

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { crc32Ogg, echantillonsOpus, lireWebmOpus, remuxWebmOpusVersOgg, type Bytes } from "../src";
+import {
+  crc32Ogg,
+  echantillonsOpus,
+  EnregistrementSansSon,
+  lireWebmOpus,
+  remuxWebmOpusVersOgg,
+  type Bytes,
+} from "../src";
 
 /**
  * Le WebM d'entrée est **construit selon la spécification Matroska**, pas selon mon
@@ -168,6 +175,20 @@ describe("remuxage WebM → Ogg : le flux Opus traverse intact", () => {
 
   it("sans paquet audio, il refuse aussi", () => {
     expect(() => remuxWebmOpusVersOgg(webmDeTest([]))).toThrow(/aucun|sans paquet/i);
+  });
+
+  /**
+   * **La classe, et pas seulement le message.** C'est sur elle que l'UI décide de dire
+   * « aucun son n'a été capté » plutôt que « l'envoi a échoué », et un `instanceof` ne se
+   * protège pas avec une expression régulière sur un texte. Vu en vrai sur iPhone : un
+   * appel téléphonique garde la session audio, le chronomètre tourne, et le conteneur
+   * sort sans un paquet.
+   */
+  it("les deux refus portent `EnregistrementSansSon`, sur quoi l'UI s'appuie", () => {
+    const vides = [webmDeTest([]), webmDeTest([paquetOpus(0x01)], [])];
+    for (const vide of vides) {
+      expect(() => remuxWebmOpusVersOgg(vide)).toThrow(EnregistrementSansSon);
+    }
   });
 
   it("un bloc lacé lève au lieu de produire un vocal muet", () => {

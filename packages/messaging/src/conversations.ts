@@ -35,6 +35,28 @@ export interface Conversation {
   peerId?: string;
   /** Dernier message texte, tel quel. La troncature est un choix de rendu. */
   preview: string;
+  /**
+   * `msgtype` du dernier message, quand il n'est pas du texte.
+   *
+   * **Sans lui, l'accueil affichait le nom du fichier** — `vocal-1793145337523.webm` —,
+   * parce que c'est ce que Matrix met dans le `body` d'une pièce jointe. Un nom de
+   * fichier n'est pas un aperçu : il ne dit ni ce que c'est, ni qui l'a envoyé, et il
+   * expose un détail que personne n'a choisi de montrer.
+   *
+   * Le paquet rend le **fait** (`m.audio`), jamais la phrase : nommer un média est du
+   * vocabulaire d'interface, et il est déjà écrit une fois dans le shard.
+   */
+  previewMsgtype?: string;
+  /** Le dernier message vient de nous. L'UI en tire « Vous » plutôt qu'un nom. */
+  previewDeMoi: boolean;
+  /**
+   * Nom d'affichage de l'expéditeur du dernier message.
+   *
+   * Nécessaire **à cause des groupes** : en tête-à-tête il vaut le nom du salon, mais
+   * dans un groupe le salon s'appelle « Équipe » et l'expéditeur s'appelle autrement.
+   * S'en passer ferait dire « Équipe vous a envoyé un message vocal ».
+   */
+  previewAuteur?: string;
   /** Horodatage du dernier message, `0` si le salon n'en a aucun. */
   timestamp: number;
   /** Compteur natif de notifications non lues. */
@@ -130,11 +152,60 @@ function avatarDe(room: Room, peerId: string | undefined): string | undefined {
   return room.getMxcAvatarUrl() ?? undefined;
 }
 
+/**
+ * **Le correspondant d'un tête-à-tête que `m.direct` ne connaît pas.**
+ *
+ * `m.direct` reste la source de vérité, et `registerDirect` juste au-dessus reste le seul
+ * à l'écrire. Mais il ne décrit que les salons que *cette* application a ouverts ou
+ * acceptés : un salon plus ancien, rejoint autrement, ou créé avant que cette écriture
+ * existe, n'y figure pas — et il n'y figurera jamais, puisque rien ne repasse derrière.
+ *
+ * Ce que l'utilisateur voyait alors, signalé sur trois écrans à la fois : les initiales au
+ * lieu de la photo du correspondant, l'absence de la liste d'amis — donc impossible de
+ * l'ajouter à un groupe —, et un écran d'informations qui annonçait « 2 membres » avec le
+ * bouton « Ajouter », c'est-à-dire la variante groupe. Trois symptômes, une cause.
+ *
+ * Le repli se fait **ici et nulle part ailleurs** : `peerId` est ce dont tout le reste
+ * dérive — `direct`, l'avatar, la liste d'amis, la teinte, le jeu d'options. Le corriger
+ * à sa source garde une seule définition du tête-à-tête, ce que la règle de `contacts.ts`
+ * exige.
+ *
+ * **Le nom est ce qui sépare les deux cas.** Un salon à deux peut être un groupe de deux
+ * personnes, et l'appeler tête-à-tête serait faux. Mais dans cette application un groupe
+ * porte **toujours** un nom : `createGroupChat` en pose un, et la feuille de création
+ * refuse de partir sans. L'état `m.room.name` est donc le discriminant — pas `room.name`,
+ * que le SDK *calcule* à partir des membres quand l'état est absent, et qui vaudrait donc
+ * le nom du correspondant précisément dans le cas qu'on cherche à reconnaître.
+ *
+ * On lit, on n'écrit pas : réparer `m.direct` au chargement ferait écrire l'application
+ * dans le compte pour un affichage, sans que personne l'ait demandé.
+ */
+function pairImplicite(session: Session, room: Room): string | undefined {
+  if (room.currentState.getStateEvents(EventType.RoomName, "")) return undefined;
+
+  // Les invités comptent : un DM dont l'autre n'a pas encore accepté est déjà un DM, et
+  // l'exclure le ferait basculer en « groupe » le temps de la réponse.
+  const presents = room
+    .getMembers()
+    .filter(
+      (membre) =>
+        membre.membership === KnownMembership.Join || membre.membership === KnownMembership.Invite,
+    );
+  if (presents.length !== 2) return undefined;
+
+  return presents.find((membre) => membre.userId !== session.client.getUserId())?.userId;
+}
+
 function describe(session: Session, room: Room, peers: Map<string, string>): Conversation {
   // le dernier message est le dernier du flux /sync, pas le plus récemment
   // horodaté. Aucun tri n'est introduit ici.
   const last = messages(session, room.roomId).at(-1);
-  const peerId = peers.get(room.roomId);
+  const peerId = peers.get(room.roomId) ?? pairImplicite(session, room);
+
+  const expediteur = last?.getSender();
+  // `m.text` n'est pas remonté : c'est le cas par défaut, et le rendre explicite
+  // obligerait chaque lecteur à le réécarter.
+  const msgtype = last?.getContent().msgtype as string | undefined;
 
   return {
     roomId: room.roomId,
@@ -142,6 +213,11 @@ function describe(session: Session, room: Room, peers: Map<string, string>): Con
     direct: peerId !== undefined,
     peerId,
     preview: last ? messageText(last) : "",
+    previewMsgtype: msgtype === "m.text" ? undefined : msgtype,
+    previewDeMoi: expediteur !== undefined && expediteur === session.client.getUserId(),
+    // `name` du membre et non l'identifiant : c'est le nom que l'écran affiche partout
+    // ailleurs. Le repli sur l'identifiant est exact, et vaut mieux qu'une ligne vide.
+    previewAuteur: expediteur ? (room.getMember(expediteur)?.name ?? expediteur) : undefined,
     timestamp: last?.getTs() ?? 0,
     unread: room.getUnreadNotificationCount(NotificationCountType.Total),
     mention: room.getUnreadNotificationCount(NotificationCountType.Highlight) > 0,

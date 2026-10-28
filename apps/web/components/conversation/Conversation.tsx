@@ -44,7 +44,12 @@ import {
   type MentionCandidate,
 } from "@tacita/messaging";
 import { callHistory } from "@tacita/calls";
-import { prepareAttachment, refusePourTaille, saveOriginal } from "@tacita/media-pipeline";
+import {
+  EnregistrementSansSon,
+  prepareAttachment,
+  refusePourTaille,
+  saveOriginal,
+} from "@tacita/media-pipeline";
 import { useOutbox } from "./OutboxProvider";
 import { createReceipts, type Receipts, type ReceiptStatus } from "@tacita/receipts";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -505,12 +510,26 @@ export function Conversation({ roomId }: { roomId: string }) {
        * mesuré sur un `.mov` d'iPhone en HEVC, refusé sous le mot
        * « compresser » alors que rien n'avait pu être décodé.
        */
+      /*
+       * **Un enregistrement vide n'est pas un envoi qui a échoué** (essai sur
+       * iPhone pendant un appel téléphonique). Rien n'était parti : mesuré aux journaux du
+       * proxy, aucun téléversement pendant l'appel, et le premier essai après avoir
+       * raccroché passe sans rien recharger. La phrase générique envoyait donc chercher un
+       * problème de réseau alors que le micro n'avait rien donné — interdit n°13.
+       *
+       * La seconde phrase est une **piste**, pas un diagnostic : on sait que
+       * l'enregistrement est vide, on ne sait pas pourquoi il l'est. L'appel est la cause
+       * qu'on a observée ; la dire ainsi ne promet rien de faux le jour où ce sera autre
+       * chose.
+       */
       setErreurMedia(
-        cause instanceof TranscodageIndisponible
-          ? cause.motif === "codec-source"
-            ? "Ce navigateur ne sait pas lire ce format de vidéo. Réexportez-la en H.264, ou envoyez-la depuis un autre appareil."
-            : "Impossible de compresser cette vidéo sur cet appareil."
-          : "L'envoi de cette pièce jointe a échoué.",
+        cause instanceof EnregistrementSansSon
+          ? "Aucun son n'a été capté : l'enregistrement est vide. Sur iPhone, un appel en cours occupe le micro."
+          : cause instanceof TranscodageIndisponible
+            ? cause.motif === "codec-source"
+              ? "Ce navigateur ne sait pas lire ce format de vidéo. Réexportez-la en H.264, ou envoyez-la depuis un autre appareil."
+              : "Impossible de compresser cette vidéo sur cet appareil."
+            : "L'envoi de cette pièce jointe a échoué.",
       );
     } finally {
       setEnvoiMedia(false);
@@ -612,6 +631,12 @@ export function Conversation({ roomId }: { roomId: string }) {
           }
           recu={recu}
           onRepondre={(message) => setIntention({ quoi: "repondre", message })}
+          // Le même écran que le bouton « Profil » des informations, et la même route :
+          // c'est de là qu'on ouvre ensuite une conversation privée avec quelqu'un
+          // croisé dans un groupe.
+          onOuvrirProfil={(message) =>
+            router.push(`/profil/${encodeURIComponent(message.auteur)}`)
+          }
           onHold={setHoldSur}
           onReagir={reagir}
           onRenvoyer={(message) => void outbox?.retry(message.cle)}

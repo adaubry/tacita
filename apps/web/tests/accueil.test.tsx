@@ -33,7 +33,12 @@ const demandes = vi.fn(() => [] as { roomId: string; name: string }[]);
 const setFavourite = vi.fn(async () => ({}));
 const openDirectMessage = vi.fn(async () => "!dm:tacita.test");
 const createGroupChat = vi.fn(async () => ({ room_id: "!groupe:tacita.test" }));
-vi.mock("@tacita/messaging", () => ({
+vi.mock("@tacita/messaging", async (original) => ({
+  // Les deux littéraux de mention sont **réels** : l'aperçu de l'accueil rend `@room`
+  // tel que l'utilisateur l'a tapé (`@everyone`), comme la timeline, et les mocker
+  // reviendrait à éprouver l'écran contre un vocabulaire qui n'est pas le sien.
+  ROOM_MENTION: (await original<typeof import("@tacita/messaging")>()).ROOM_MENTION,
+  EVERYONE: (await original<typeof import("@tacita/messaging")>()).EVERYONE,
   conversations: () => listees(),
   invitations: () => demandes(),
   setFavourite: (...args: unknown[]) => setFavourite(...(args as [])),
@@ -52,6 +57,7 @@ function conversation(partiel: Partial<Conversation> = {}): Conversation {
     direct: true,
     peerId: "@alice:tacita.test",
     preview: "on se voit demain ?",
+    previewDeMoi: false,
     timestamp: AUJOURDHUI,
     unread: 0,
     mention: false,
@@ -114,6 +120,57 @@ describe("la carte de conversation : avatar, nom, aperçu, date", () => {
     expect(screen.getAllByText("alice").length).toBeGreaterThan(0);
     expect(screen.getByText("on se voit demain ?")).toBeTruthy();
     expect(screen.getByText(dateApercu(AUJOURDHUI, AUJOURDHUI))).toBeTruthy();
+  });
+
+  /**
+   * **Un nom de fichier n'est pas un aperçu.** Signalé sur l'accueil : le dernier message
+   * d'une conversation s'y affichait `vocal-1793145337523.webm`, parce que c'est ce que
+   * Matrix met dans le `body` d'une pièce jointe. Ça ne dit ni ce que c'est, ni dans quel
+   * sens ça va, et ça expose un détail que personne n'a choisi de montrer.
+   */
+  it("une pièce jointe se nomme, et la phrase dit qui l'a envoyée à qui", () => {
+    const rendre = (partiel: Partial<Conversation>) => {
+      cleanup();
+      render(
+        <ConversationPreview
+          conversation={conversation(partiel)}
+          onOuvrir={vi.fn()}
+          onEpingler={vi.fn()}
+          maintenant={AUJOURDHUI}
+        />,
+      );
+    };
+
+    rendre({ preview: "vocal-179.webm", previewMsgtype: "m.audio", previewAuteur: "adam" });
+    expect(screen.getByText("adam vous a envoyé un message vocal")).toBeTruthy();
+    // Le nom du fichier a disparu de l'écran, c'était tout le problème.
+    expect(screen.queryByText(/\.webm/)).toBeNull();
+
+    rendre({ preview: "vocal-179.webm", previewMsgtype: "m.audio", previewDeMoi: true });
+    expect(screen.getByText("Vous avez envoyé un message vocal")).toBeTruthy();
+
+    // Le nom vient de l'expéditeur, pas du salon : sinon un groupe dirait « Équipe vous
+    // a envoyé une photo ».
+    rendre({
+      name: "Équipe",
+      direct: false,
+      preview: "IMG_4417.HEIC",
+      previewMsgtype: "m.image",
+      previewAuteur: "maxence",
+    });
+    expect(screen.getByText("maxence vous a envoyé une photo")).toBeTruthy();
+  });
+
+  it("un message texte reste rendu tel quel — la phrase ne vise que les pièces jointes", () => {
+    render(
+      <ConversationPreview
+        conversation={conversation({ preview: "on se voit demain ?" })}
+        onOuvrir={vi.fn()}
+        onEpingler={vi.fn()}
+        maintenant={AUJOURDHUI}
+      />,
+    );
+    expect(screen.getByText("on se voit demain ?")).toBeTruthy();
   });
 
   it("aujourd'hui donne une heure, hier une date courte — deux formats distincts", () => {
