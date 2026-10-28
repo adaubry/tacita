@@ -71,7 +71,7 @@ const DELAI_MAINTIEN_MS = 250;
 /** Au-delà, l'enregistrement s'arrête de lui-même. */
 export const DUREE_MAX_FILM_MS = 60_000;
 /** La course du doigt, vers le haut, qui mène du plan large au zoom maximal. */
-const COURSE_ZOOM_PX = 300;
+const COURSE_ZOOM_PX = 600;
 /** Au-delà de ce facteur, une caméra de téléphone ne rend plus qu'un flou numérique. */
 const ZOOM_MAX = 10;
 const libelleZoom = (valeur: number) => `${valeur.toFixed(1).replace(".", ",")}×`;
