@@ -58,16 +58,20 @@ describe("la passerelle Web Push est provisionnée par ce module", () => {
     expect(service.ports).toBeUndefined();
   });
 
-  it("le proxy n'expose que la clé publique VAPID, jamais l'endpoint de notification", () => {
+  it("le proxy n'expose que la clé VAPID et la présence, jamais l'endpoint de notification", () => {
     expect(nginxConf).toMatch(
       /location = \/push\/config\s*{[^}]*proxy_pass\s+http:\/\/\$push_gateway_upstream\/config;/s,
     );
 
-    // Toute route vers la passerelle doit viser `/config` et rien d'autre : c'est ce
-    // qui garde `/_matrix/push/v1/notify` hors d'atteinte depuis l'extérieur.
+    // Liste close des routes vers la passerelle : c'est ce qui garde
+    // `/_matrix/push/v1/notify` hors d'atteinte depuis l'extérieur. `/presence` ne peut
+    // que **taire** les pushes d'un abonnement dont on connaît l'URL secrète, jamais en
+    // émettre — l'ajouter à la liste est un choix, pas une dérive.
     const versLaPasserelle = [...nginxConf.matchAll(/proxy_pass\s+([^;]*push_gateway[^;]*);/g)];
-    expect(versLaPasserelle).toHaveLength(1);
-    expect(versLaPasserelle[0]![1]).toMatch(/\/config$/);
+    expect(versLaPasserelle.map(([, cible]) => cible!.replace(/^.*push_gateway_upstream/, "")).sort()).toEqual([
+      "/config",
+      "/presence",
+    ]);
   });
 
   it("l'URL du pusher à enregistrer côté client est documentée", () => {

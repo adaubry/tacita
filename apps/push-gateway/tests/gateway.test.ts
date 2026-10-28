@@ -1,6 +1,7 @@
 import type { AddressInfo } from "node:net";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import webpush from "web-push";
+import { DUREE_PRESENCE_MS } from "../src/notify.ts";
 import { createGateway } from "../src/server.ts";
 
 vi.mock("web-push", () => ({ default: { sendNotification: vi.fn(), setVapidDetails: vi.fn() } }));
@@ -191,5 +192,51 @@ describe("aucun contenu utilisateur dans les logs", () => {
     expect(logs).not.toMatch(new RegExp(secrets.join("|")));
     expect(logs).toContain("push_failed");
     expect(logs).toContain("410");
+  });
+});
+
+describe("/presence : l'app à l'écran ne reçoit pas de push", () => {
+  const presence = (body: unknown) =>
+    fetch(url("/presence"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+  it("visible : le push n'est pas envoyé, et la pushkey n'est pas rejetée", async () => {
+    const pushkey = "https://push.example/a-l-ecran";
+    expect((await presence({ pushkey, visible: true })).status).toBe(200);
+
+    const response = await postNotify(synapsePayload([device(pushkey)]));
+    await expect(response.json()).resolves.toEqual({ rejected: [] });
+    expect(sendNotification).not.toHaveBeenCalled();
+  });
+
+  it("repartie : le push repart", async () => {
+    const pushkey = "https://push.example/repartie";
+    await presence({ pushkey, visible: true });
+    await presence({ pushkey, visible: false });
+
+    await postNotify(synapsePayload([device(pushkey)]));
+    expect(sendNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("sans nouvelle de la page passé l'échéance, le push repart", async () => {
+    const pushkey = "https://push.example/page-tuee";
+    await presence({ pushkey, visible: true });
+    const maintenant = Date.now();
+    vi.spyOn(Date, "now").mockReturnValue(maintenant + DUREE_PRESENCE_MS + 1);
+
+    await postNotify(synapsePayload([device(pushkey)]));
+    expect(sendNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("une pushkey qui n'est pas une URL https est refusée", async () => {
+    expect((await presence({ pushkey: "n'importe quoi", visible: true })).status).toBe(400);
+  });
+
+  it("un corps démesuré est refusé, pas lu sans fin", async () => {
+    const enorme = { pushkey: "https://push.example/x", visible: true, bourrage: "x".repeat(2_000_000) };
+    expect((await presence(enorme)).status).toBe(400);
   });
 });

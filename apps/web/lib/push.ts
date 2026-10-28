@@ -11,7 +11,7 @@
 import type { Session } from "@tacita/client-core";
 import { mentionCandidates, messages as listerMessages, messageText } from "@tacita/messaging";
 
-import { PUSH_CONFIG_URL, PUSH_NOTIFY_URL } from "./config";
+import { PUSH_CONFIG_URL, PUSH_NOTIFY_URL, PUSH_PRESENCE_URL } from "./config";
 
 /**
  * la chaîne Web Push côté client, de bout en bout.
@@ -169,6 +169,32 @@ export interface DiagnosticPush {
 }
 
 const APP_ID = "org.tacita.web";
+
+/** L'endpoint de l'abonnement push de cet appareil, s'il en a un. */
+export async function endpointPush(): Promise<string | undefined> {
+  if (!("serviceWorker" in navigator)) return undefined;
+  const enregistrement = await navigator.serviceWorker.getRegistration();
+  return (await enregistrement?.pushManager.getSubscription())?.endpoint;
+}
+
+/**
+ * **L'app à l'écran ne doit recevoir aucun push**, et seule la passerelle peut le
+ * garantir : iOS affiche toute notification, premier plan compris, et retire
+ * l'abonnement d'un service worker qui s'en abstient. Voir `signalerPresence` côté
+ * passerelle.
+ *
+ * Synchrone jusqu'au `fetch` : au passage en arrière-plan, iOS gèle la page juste
+ * après `visibilitychange`, et un `await` avant l'envoi le perdrait. `keepalive` le
+ * laisse partir même si la page s'en va.
+ */
+export function signalerPresence(endpoint: string, visible: boolean): Promise<unknown> {
+  return fetch(PUSH_PRESENCE_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ pushkey: endpoint, visible }),
+    keepalive: true,
+  });
+}
 
 /** la clé publique VAPID, servie par la passerelle. */
 async function cleVapid(): Promise<string> {

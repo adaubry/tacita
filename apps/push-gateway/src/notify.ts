@@ -38,6 +38,43 @@ const OPTIONS = {
   contentEncoding: "aes128gcm",
 } as const;
 
+/**
+ * **Les abonnements dont l'app est à l'écran**, pushkey → échéance (ms).
+ *
+ * Une app au premier plan n'a rien à apprendre d'une notification, mais iOS interdit au
+ * service worker de la taire : chaque push doit en produire une, et au troisième push
+ * muet Safari retire l'abonnement. Et une notification affichée puis refermée s'y voit
+ * quand même. Le seul push qui ne s'affiche pas est celui qu'on n'envoie pas.
+ *
+ * La page se signale tant qu'elle est visible ; sans nouvelle avant l'échéance, elle est
+ * tenue pour partie (page tuée sans avoir pu le dire).
+ *
+ * Connaître la pushkey suffit à faire taire ses pushes : c'est une URL longue et
+ * aléatoire que seuls le navigateur, Synapse et cette passerelle connaissent — la même
+ * capacité qu'il faut déjà pour lui en envoyer.
+ *
+ * ponytail: en mémoire, perdu au redémarrage (au pire une notification de trop pendant
+ * 20 s) et propre à une instance — un magasin partagé le jour où la passerelle en a deux.
+ */
+const premierPlan = new Map<string, number>();
+export const DUREE_PRESENCE_MS = 45_000;
+/** Borne de la table : la route est publique, elle ne doit pas pouvoir la faire grossir sans fin. */
+const PRESENCES_MAX = 10_000;
+
+export function signalerPresence(pushkey: string, visible: boolean, maintenant = Date.now()): void {
+  if (!visible) {
+    premierPlan.delete(pushkey);
+    return;
+  }
+  if (!premierPlan.has(pushkey) && premierPlan.size >= PRESENCES_MAX) {
+    for (const [cle, echeance] of premierPlan) if (echeance <= maintenant) premierPlan.delete(cle);
+    if (premierPlan.size >= PRESENCES_MAX) return;
+  }
+  premierPlan.set(pushkey, maintenant + DUREE_PRESENCE_MS);
+}
+
+const aLEcran = (pushkey: string, maintenant: number) => (premierPlan.get(pushkey) ?? 0) > maintenant;
+
 /** Relaie une notification Synapse en Web Push ; retourne les pushkeys à supprimer. */
 export async function notify(notification: Notification): Promise<string[]> {
   const { event_id, room_id, sender, sender_display_name, devices = [] } = notification;
@@ -45,9 +82,12 @@ export async function notify(notification: Notification): Promise<string[]> {
   if (!event_id || !room_id) return [];
 
   const rejected: string[] = [];
+  const maintenant = Date.now();
   await Promise.all(
     devices.map(async ({ pushkey, data }) => {
       if (!pushkey) return;
+      // L'app est à l'écran : elle a déjà le message. Pas un rejet — l'abonnement vit.
+      if (aLEcran(pushkey, maintenant)) return;
       if (!data?.p256dh || !data.auth) {
         rejected.push(pushkey); // pusher inutilisable : aucun push ne peut être chiffré pour lui
         return;

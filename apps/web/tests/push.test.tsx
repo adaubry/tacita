@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { PushNotifications } from "../components/notifications/PushNotifications";
 import { NotificationsPush } from "../components/settings/NotificationsPush";
 import { SessionProvider } from "../components/onboarding/SessionProvider";
-import { PUSH_CONFIG_URL, PUSH_NOTIFY_URL } from "../lib/config";
+import { PUSH_CONFIG_URL, PUSH_NOTIFY_URL, PUSH_PRESENCE_URL } from "../lib/config";
 import {
   apercuLocal,
   brancherPush,
@@ -287,6 +287,38 @@ describe("la proposition est faite une fois, et une seule", () => {
     await waitFor(() => expect(notifierSalons).toBeDefined());
     expect(screen.queryByText(/Être prévenu/)).toBeNull();
     expect(permission.requestPermission).not.toHaveBeenCalled();
+  });
+});
+
+describe("présence : l'app à l'écran se signale à la passerelle", () => {
+  const presences = () =>
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(([cible]) => cible === PUSH_PRESENCE_URL)
+      .map(([, options]) => JSON.parse(String((options as RequestInit).body)) as unknown);
+
+  afterEach(() => {
+    // Rendu au défaut de jsdom : la propriété posée ici masquait celle du prototype.
+    delete (document as { visibilityState?: unknown }).visibilityState;
+  });
+
+  it("visible, elle se signale ; en arrière-plan, elle se retire aussitôt", async () => {
+    vi.stubGlobal("Notification", { permission: "granted", requestPermission: vi.fn() });
+    abonnement = faireAbonnement();
+    rendre(<PushNotifications indexedDB={base} />);
+
+    await waitFor(() => expect(presences()).toContainEqual({ pushkey: ENDPOINT, visible: true }));
+
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(presences().at(-1)).toEqual({ pushkey: ENDPOINT, visible: false });
+  });
+
+  it("sans permission, rien n'est signalé : il n'y a pas de push à taire", async () => {
+    vi.stubGlobal("Notification", { permission: "default", requestPermission: vi.fn() });
+    rendre(<PushNotifications indexedDB={base} />);
+    await waitFor(() => expect(serviceWorker.ecouteurs.size).toBe(1));
+    expect(presences()).toEqual([]);
   });
 });
 
