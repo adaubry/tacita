@@ -300,9 +300,19 @@ export async function brancherPush(session: Session): Promise<DiagnosticPush> {
 
     // Un pusher encore en `event_id_only` compte comme absent : ce format retire aussi
     // l'expéditeur, et le réécrire ici suffit à migrer les appareils déjà abonnés.
+    //
+    // Un pusher posé par un **autre appareil** aussi. Se reconnecter dans la même PWA
+    // garde l'abonnement mais donne un nouvel appareil Matrix : le pusher restait lié à
+    // l'ancien, et Synapse le supprime avec lui — révoquer « les autres appareils »
+    // coupait les notifications de celui-ci, sans un signe.
+    // Le réécrire le rattache à l'appareil courant : Synapse le met à jour en place.
+    const appareil = session.client.getDeviceId() ?? "web";
     const deja = pushers.some(
       (pusher) =>
-        pusher.pushkey === endpoint && pusher.app_id === APP_ID && pusher.data.format !== "event_id_only",
+        pusher.pushkey === endpoint &&
+        pusher.app_id === APP_ID &&
+        pusher.device_display_name === appareil &&
+        pusher.data.format !== "event_id_only",
     );
     if (deja) return { etat: "abonne", permission: true, abonnement: true, pusher: true };
 
@@ -311,7 +321,7 @@ export async function brancherPush(session: Session): Promise<DiagnosticPush> {
       app_id: APP_ID,
       pushkey: endpoint,
       app_display_name: "Tacita",
-      device_display_name: session.client.getDeviceId() ?? "web",
+      device_display_name: appareil,
       lang: "fr",
       // La spec Matrix laisse `data` libre ; le type du SDK ne connaît que `url`, `format`
       // et `brand`. Les clés de la subscription y sont indispensables — c'est là que la
