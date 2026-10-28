@@ -25,6 +25,7 @@ import {
   createTypingIndicator,
   edit,
   getPinnedEvents,
+  invitedCount,
   memberCount,
   members,
   mentionCandidates,
@@ -55,7 +56,7 @@ import { createReceipts, type Receipts, type ReceiptStatus } from "@tacita/recei
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { identifiantCourt } from "../../lib/identifiants";
+import { compteurMembres, identifiantCourt } from "../../lib/identifiants";
 import { routeAppel, routeInfos } from "../../lib/routes";
 import { TranscodageIndisponible } from "../../lib/media-env";
 import { brancherModeMasque } from "../../lib/mode-masque";
@@ -621,7 +622,10 @@ export function Conversation({ roomId }: { roomId: string }) {
                 salon?.direct
                   ? // l'identifiant sans son domaine, identique pour tous.
                     (salon.peerId ? identifiantCourt(salon.peerId) : "")
-                  : `${session ? memberCount(session, roomId) : 0} membres`
+                  : compteurMembres(
+                      session ? memberCount(session, roomId) : 0,
+                      session ? invitedCount(session, roomId) : 0,
+                    )
               }
               direct={salon?.direct ?? false}
             />

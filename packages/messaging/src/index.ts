@@ -39,6 +39,7 @@ export {
   kick,
   knock,
   knockers,
+  invitedCount,
   memberCount,
   members,
   PINNED_EVENTS_METADATA,

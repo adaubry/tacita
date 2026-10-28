@@ -76,6 +76,9 @@ vi.mock("@tacita/messaging", async (original) => ({
   getPinnedEvents: () => [],
   messages: () => [],
   memberCount: () => 4,
+  // Aucune invitation en attente par défaut : le compteur ne doit pas s'allonger dans
+  // les tests qui n'en parlent pas.
+  invitedCount: () => 0,
   members: () => listeMembres(),
   canKick: (...args: unknown[]) => droitKick(...(args as [])),
   // E-13 — les demandes d'entrée s'affichent au-dessus des membres. Vide par défaut :

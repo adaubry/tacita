@@ -11,6 +11,7 @@ import { Navbar, ONGLETS } from "../components/foundation/Navbar";
 import { Placeholder } from "../components/foundation/Placeholder";
 import { Sheet } from "../components/foundation/Sheet";
 import { SegmentedControl, SegmentedControlItem } from "../components/foundation/primitives";
+import { compteurMembres } from "../lib/identifiants";
 import { RACINE, lire, sansCommentaires, sourcesLivrees } from "./sources";
 import { Skeleton } from "../components/foundation/Skeleton";
 
@@ -546,5 +547,31 @@ describe("la file d'envoi appartient à la session, pas à un écran", () => {
   it("le provider enveloppe les écrans dans le shell", () => {
     const providers = readFileSync(join(RACINE, "app/providers.tsx"), "utf8");
     expect(providers).toMatch(/<OutboxProvider>/);
+  });
+});
+
+describe("l'accord du compteur de membres", () => {
+  it("« 1 membre » au singulier, « 2 membres » au-delà", () => {
+    // Vu sur un groupe fraîchement créé : les invités n'ont pas encore accepté, le
+    // compte vaut 1, et l'écran annonçait « 1 membres ».
+    expect(compteurMembres(1)).toBe("1 membre");
+    expect(compteurMembres(2)).toBe("2 membres");
+    // Zéro prend le singulier en français — « 0 membre ».
+    expect(compteurMembres(0)).toBe("0 membre");
+  });
+
+  /**
+   * Matrix ne compte comme membre que celui qui a **rejoint**. Un groupe qu'on vient de
+   * créer annonçait donc « 1 membre », soi, alors qu'on venait d'inviter deux personnes :
+   * exact, et incompréhensible — on croit que l'invitation a échoué.
+   */
+  it("les invitations en attente se disent, et ne se fondent pas dans le total", () => {
+    expect(compteurMembres(1, 2)).toBe("1 membre, 2 invitations en attente");
+    expect(compteurMembres(3, 1)).toBe("3 membres, 1 invitation en attente");
+    // Annoncer « 3 membres » quand deux n'ont rien accepté serait une promesse non
+    // tenue affichée (interdit n°13) : les deux nombres restent distincts.
+    expect(compteurMembres(1, 2)).not.toContain("3");
+    // Personne en attente : la phrase ne s'allonge pas pour rien.
+    expect(compteurMembres(4, 0)).toBe("4 membres");
   });
 });
