@@ -40,8 +40,16 @@ export function useMediaActions(session: Session | null) {
    * lui-même. C'est l'appelant qui décide s'il en fait un message.
    */
   const avis = useRef<Parameters<NonNullable<MediaEnvironment["signaler"]>>[0] | undefined>(undefined);
+  /** La raison technique de l'avis, quand le pipeline la connaît. */
+  const avisDetail = useRef<string | undefined>(undefined);
   const env = useMemo(
-    () => environnementMedia({ signaler: (recu) => { avis.current = recu; } }),
+    () =>
+      environnementMedia({
+        signaler: (recu, detail) => {
+          avis.current = recu;
+          avisDetail.current = detail;
+        },
+      }),
     [],
   );
 
@@ -137,5 +145,5 @@ export function useMediaActions(session: Session | null) {
     [session, telecharger, env],
   );
 
-  return { env, avis, telecharger, telechargerChiffre, sauvegarder };
+  return { env, avis, avisDetail, telecharger, telechargerChiffre, sauvegarder };
 }

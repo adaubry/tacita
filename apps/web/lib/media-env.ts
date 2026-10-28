@@ -294,7 +294,9 @@ export function environnementMedia(options: { signaler?: MediaEnvironment["signa
         const mesure = await mesurerVideo(blob).catch(() => undefined);
         if (!mesure) throw cause;
 
-        options.signaler?.("video-non-compressee");
+        // La raison voyage avec l'avis : « ce navigateur ne sait pas » recouvrait trois
+        // pannes différentes, et une vidéo d'iPhone partie entière ne disait pas laquelle.
+        options.signaler?.("video-non-compressee", cause instanceof Error ? cause.message : undefined);
         return { blob, ...mesure };
       }
     },

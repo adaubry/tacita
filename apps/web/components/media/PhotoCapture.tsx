@@ -70,6 +70,9 @@ const OMBRE_TEXTE = "rgba(0, 0, 0, 0.5)";
 const DELAI_MAINTIEN_MS = 250;
 /** Au-delà, l'enregistrement s'arrête de lui-même. */
 export const DUREE_MAX_FILM_MS = 60_000;
+/** Le débit d'enregistrement d'un film : celui que vise la chaîne d'envoi (profil « good »). */
+const DEBIT_FILM = 2_500_000;
+
 /** La course du doigt, vers le haut, qui mène du plan large au zoom maximal. */
 const COURSE_ZOOM_PX = 600;
 /** Au-delà de ce facteur, une caméra de téléphone ne rend plus qu'un flou numérique. */
@@ -423,7 +426,10 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
   const filmer = () => {
     const format = formatVideo();
     if (!flux || !format || !doigtPose.current) return;
-    const recorder = new MediaRecorder(flux, { mimeType: format });
+    // Le débit de la cible d'envoi, dès l'enregistrement : si le réencodage échoue et que
+    // le film part tel quel, il reste léger — sans plafond, Safari enregistre bien
+    // au-dessus, et une minute pesait plusieurs dizaines de mégaoctets.
+    const recorder = new MediaRecorder(flux, { mimeType: format, videoBitsPerSecond: DEBIT_FILM });
     const morceaux: Blob[] = [];
     const debut = Date.now();
     recorder.ondataavailable = (evenement) => {
@@ -530,7 +536,8 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
     onPointerMove(evenement: PointerEvent<HTMLButtonElement>) {
       if (!doigtPose.current) return;
       if (enregistreur.current) {
-        const armee = origineX.current - evenement.clientX >= COURSE_ANNULATION;
+        // Vers la droite, là où est la croix.
+        const armee = evenement.clientX - origineX.current >= COURSE_ANNULATION;
         if (armee !== annulationArmeeRef.current) {
           annulationArmeeRef.current = armee;
           setAnnulationArmee(armee);
@@ -810,9 +817,11 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
                   )}
                   {/*
                    * Trois colonnes, le déclencheur au centre : la croix d'annulation se pose à
-                   * sa gauche, là où le pouce la trouve sans lâcher — le geste de la poubelle du
-                   * vocal. Elle reste un vrai bouton : au clavier, annuler ne peut pas dépendre
-                   * d'un glissement.
+                   * sa **droite**, là où le pouce la trouve sans lâcher — la plupart des gens
+                   * tiennent le téléphone de la main droite, et ramener le pouce vers la
+                   * droite est plus facile que l'étendre vers la gauche (retour d'usage). Elle
+                   * reste un vrai bouton : au clavier, annuler ne peut pas dépendre d'un
+                   * glissement.
                    */}
                   <div
                     style={{
@@ -822,20 +831,7 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
                       width: "100%",
                     }}
                   >
-                    <div style={{ justifySelf: "end", marginInlineEnd: "var(--spacing-6)" }}>
-                      {film && (
-                        <Button
-                          label="Annuler la vidéo"
-                          variant={annulationArmee ? "destructive" : "ghost"}
-                          isIconOnly
-                          icon={IconeFermer}
-                          // Armée, la croix perd son verre pour prendre la couleur du
-                          // destructif : `.tacita-retour` l'emporterait sinon.
-                          className={annulationArmee ? undefined : "tacita-retour"}
-                          onClick={annulerFilm}
-                        />
-                      )}
-                    </div>
+                    <div />
                     <div style={{ display: "grid", placeItems: "center" }}>
                     <button
                       type="button"
@@ -876,7 +872,20 @@ export function PhotoCapture({ ouvert, onFermer, onEnregistrer, onEnvoyer }: Pho
                       </svg>
                     )}
                     </div>
-                    <div />
+                    <div style={{ justifySelf: "start", marginInlineStart: "var(--spacing-6)" }}>
+                      {film && (
+                        <Button
+                          label="Annuler la vidéo"
+                          variant={annulationArmee ? "destructive" : "ghost"}
+                          isIconOnly
+                          icon={IconeFermer}
+                          // Armée, la croix perd son verre pour prendre la couleur du
+                          // destructif : `.tacita-retour` l'emporterait sinon.
+                          className={annulationArmee ? undefined : "tacita-retour"}
+                          onClick={annulerFilm}
+                        />
+                      )}
+                    </div>
                   </div>
                 </>
               )}

@@ -570,7 +570,7 @@ describe("capture : « sur votre appareil » et « envoyé » ne se confondent p
       onstop: (() => void) | null = null;
       constructor(
         public flux: unknown,
-        options: { mimeType: string },
+        public options: { mimeType: string; videoBitsPerSecond?: number },
       ) {
         this.mimeType = options.mimeType;
         FauxEnregistreur.instances.push(this);
@@ -657,6 +657,8 @@ describe("capture : « sur votre appareil » et « envoyé » ne se confondent p
       expect(enregistreur.mimeType).toMatch(/^video\/mp4/);
       // Image et son, du même flux : celui ouvert avec la caméra.
       expect(enregistreur.flux).toBe(dernierFlux);
+      // Le débit de la cible d'envoi dès l'enregistrement : un film parti tel quel reste léger.
+      expect(enregistreur.options.videoBitsPerSecond).toBe(2_500_000);
 
       pointeur("pointerup");
       expect(await screen.findByLabelText("Vidéo filmée")).toBeTruthy();
@@ -713,13 +715,14 @@ describe("capture : « sur votre appareil » et « envoyé » ne se confondent p
       expect(screen.getByRole("button", { name: "Annuler la vidéo" })).toBeTruthy();
       expect(screen.getByText("Glissez vers la croix pour annuler")).toBeTruthy();
 
-      // Un pouce qui roule de quelques pixels n'arme rien ; 100 px vers la gauche, si.
-      glisser("pointermove", 180);
+      // Un pouce qui roule de quelques pixels n'arme rien, ni la gauche ; 100 px vers la droite, si.
+      glisser("pointermove", 220);
+      glisser("pointermove", 80);
       expect(screen.getByText("Glissez vers la croix pour annuler")).toBeTruthy();
-      glisser("pointermove", 100);
+      glisser("pointermove", 300);
       expect(screen.getByText("Relâchez pour annuler")).toBeTruthy();
 
-      glisser("pointerup", 100);
+      glisser("pointerup", 300);
       fireEvent.click(declencheur());
       await waitFor(() => expect(screen.queryByText("0:00")).toBeNull());
       expect(screen.queryByLabelText("Vidéo filmée")).toBeNull();
@@ -1401,7 +1404,8 @@ describe("le transcodage ne rejoue plus la vidéo pour la lire", () => {
     expect(env).toContain("const mesure = await mesurerVideo(blob).catch(() => undefined);");
     expect(env).toContain("if (!mesure) throw cause;");
     // Et l'expéditeur l'apprend : le fichier part entier, donc plus lourd.
-    expect(env).toContain('options.signaler?.("video-non-compressee")');
+    // Avec sa raison : « ne sait pas » recouvrait trois pannes différentes.
+    expect(env).toContain('options.signaler?.("video-non-compressee", cause instanceof Error');
     expect(sansCommentaires(lire("components/conversation/Conversation.tsx"))).toContain(
       'avis.current === "video-non-compressee"',
     );

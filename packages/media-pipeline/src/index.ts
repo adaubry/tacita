@@ -146,7 +146,7 @@ export interface MediaEnvironment extends CryptoEnvironment {
    * navigateur n'a pas su le recompresser. Le destinataire le lira ; l'expéditeur, lui,
    * doit savoir qu'il vient d'envoyer l'original et non une version allégée.
    */
-  signaler?(avis: "video-sans-son" | "video-non-compressee"): void;
+  signaler?(avis: "video-sans-son" | "video-non-compressee", detail?: string): void;
 }
 
 /**
