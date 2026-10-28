@@ -28,6 +28,14 @@ interface SalonFictif {
   messages?: { texte: string; ts: number; msgtype?: string; sender?: string }[];
   /** Nom d'affichage par membre — l'aperçu nomme l'expéditeur, jamais le salon. */
   nomsMembres?: Record<string, string>;
+  /**
+   * Les membres du salon, avec leur appartenance. Le doublon doit les porter depuis que
+   * `pairImplicite` reconnaît un tête-à-tête que `m.direct` ignore : sans eux, il ne peut
+   * ni confirmer ni infirmer la règle.
+   */
+  membres?: { userId: string; membership?: "join" | "invite" | "leave" }[];
+  /** Le salon porte un état `m.room.name` — c'est ce qui en fait un groupe. */
+  nomme?: boolean;
   unread?: number;
   highlight?: number;
   tags?: string[];
@@ -64,6 +72,17 @@ function fakeClient(salons: SalonFictif[], directs: Record<string, string[]> = {
       const nom = salon.nomsMembres?.[userId];
       if (mxc === undefined && nom === undefined) return null;
       return { getMxcAvatarUrl: () => mxc ?? null, name: nom };
+    },
+    getMembers: () =>
+      (salon.membres ?? []).map(({ userId, membership }) => ({
+        userId,
+        membership: membership ?? "join",
+      })),
+    // Seul `m.room.name` est interrogé : un salon « nommé » est un groupe, et c'est la
+    // seule chose que `pairImplicite` lit de l'état.
+    currentState: {
+      getStateEvents: (type: string) =>
+        type === "m.room.name" && salon.nomme ? { getContent: () => ({ name: salon.name }) } : null,
     },
   }));
 
@@ -150,6 +169,66 @@ describe("liste des conversations, compteurs natifs, invitations à part", () =>
       previewAuteur: "alice",
     });
     expect(mien).toMatchObject({ previewMsgtype: "m.image", previewDeMoi: true, previewAuteur: "bob" });
+  });
+
+  /**
+   * **Un salon à deux que `m.direct` ignore reste un tête-à-tête.** Signalé sur trois
+   * écrans à la fois : initiales au lieu de la photo du correspondant, absence de la
+   * liste d'amis — donc impossible de l'ajouter à un groupe —, et un écran
+   * d'informations annonçant « 2 membres » avec le bouton « Ajouter ». `m.direct` ne
+   * décrit que les salons que cette application a ouverts ou acceptés ; rien ne repasse
+   * derrière pour les autres.
+   */
+  it("un salon à deux sans nom est un tête-à-tête, même absent de `m.direct`", () => {
+    const { session } = fakeClient([
+      {
+        roomId: "!orphelin:t",
+        name: "alice",
+        membres: [{ userId: MOI }, { userId: ALICE }],
+      },
+    ]);
+
+    const [salon] = conversations(session);
+    expect(salon).toMatchObject({ direct: true, peerId: ALICE });
+  });
+
+  it("une invitation en attente compte : un DM ne devient pas un groupe le temps d'une réponse", () => {
+    const { session } = fakeClient([
+      {
+        roomId: "!invite:t",
+        name: "alice",
+        membres: [{ userId: MOI }, { userId: ALICE, membership: "invite" }],
+      },
+    ]);
+    expect(conversations(session)[0]).toMatchObject({ direct: true, peerId: ALICE });
+  });
+
+  /**
+   * Le garde-fou de la règle : un groupe de deux personnes existe, et l'appeler
+   * tête-à-tête serait faux. Dans cette application un groupe porte toujours un nom —
+   * `createGroupChat` en pose un, et la feuille de création refuse de partir sans.
+   */
+  it("un salon à deux **nommé** reste un groupe", () => {
+    const { session } = fakeClient([
+      {
+        roomId: "!duo:t",
+        name: "Équipe",
+        nomme: true,
+        membres: [{ userId: MOI }, { userId: ALICE }],
+      },
+    ]);
+    expect(conversations(session)[0]).toMatchObject({ direct: false, peerId: undefined });
+  });
+
+  it("à trois, ce n'est plus un tête-à-tête", () => {
+    const { session } = fakeClient([
+      {
+        roomId: "!trois:t",
+        name: "trois",
+        membres: [{ userId: MOI }, { userId: ALICE }, { userId: "@carol:t" }],
+      },
+    ]);
+    expect(conversations(session)[0]!.direct).toBe(false);
   });
 
   it("un message texte ne porte aucun type : c'est le cas par défaut", () => {

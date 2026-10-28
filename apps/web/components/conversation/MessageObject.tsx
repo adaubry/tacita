@@ -59,6 +59,14 @@ interface MessageObjectProps {
   onRepondre: () => void;
   onHold: () => void;
   onRevelerHeures: () => void;
+  /**
+   * Ouvrir le profil de l'auteur depuis son nom.
+   *
+   * Facultatif : les écrans qui rendent un message hors d'une conversation — la
+   * recherche, les collections — n'ont pas de pile de navigation où pousser un profil, et
+   * un nom cliquable qui ne mène nulle part serait pire que pas de lien.
+   */
+  onOuvrirProfil?: () => void;
   onReagir?: (emoji: string) => void;
   onRenvoyer?: () => void;
   onAbandonner?: () => void;
@@ -183,6 +191,7 @@ export function MessageObject({
   onRepondre,
   onHold,
   onRevelerHeures,
+  onOuvrirProfil,
   onReagir,
   onRenvoyer,
   onAbandonner,
@@ -318,11 +327,46 @@ export function MessageObject({
         {/* Le nom ne se répète pas dans un groupe, et **jamais pour soi** : on sait qui on
             est, et l'écrire au-dessus de chacune de ses propres bulles est le bruit que le
             regroupement sert justement à retirer. L'heure descend au pied de la grappe. */}
-        {entete && !moi && (
-          <Text type="supporting" weight="bold" style={{ color: encreAuteur }}>
-            {message.nom}
-          </Text>
-        )}
+        {entete &&
+          !moi &&
+          /*
+           * **Le nom mène au profil** (demande utilisateur). C'est le chemin qui manquait
+           * depuis un groupe : on y lit un message de quelqu'un qu'on ne connaît pas
+           * encore, et rien ne permettait d'aller voir qui c'est, ni d'ouvrir une
+           * conversation privée avec lui.
+           *
+           * Un vrai `<button>` et non un `onClick` sur le texte : le nom devient une
+           * cible de tabulation et s'annonce comme un contrôle, ce qu'un `span` cliquable
+           * ne fait pas. Il garde l'apparence du nom — c'est le mot qui est la cible,
+           * exactement comme dans toutes les messageries, et l'habiller en lien
+           * l'alourdirait au-dessus de chaque grappe.
+           *
+           * Pas de bouton quand personne n'écoute : le composant sert aussi la recherche
+           * et les collections, qui n'ont pas de pile où pousser un profil.
+           */
+          (onOuvrirProfil ? (
+            <button
+              type="button"
+              onClick={onOuvrirProfil}
+              aria-label={`Profil de ${message.nom}`}
+              style={{
+                padding: 0,
+                border: 0,
+                background: "none",
+                font: "inherit",
+                textAlign: "start",
+                cursor: "pointer",
+              }}
+            >
+              <Text type="supporting" weight="bold" style={{ color: encreAuteur }}>
+                {message.nom}
+              </Text>
+            </button>
+          ) : (
+            <Text type="supporting" weight="bold" style={{ color: encreAuteur }}>
+              {message.nom}
+            </Text>
+          ))}
 
         {/* **La pièce jointe n'entre pas dans une bulle** (DESIGN.md § Components) : dans
             la timeline, un média *est* le message, et il garde le cadrage de son auteur.

@@ -39,6 +39,8 @@ interface TimelineProps {
   recu?: { cle: string; statut: ReceiptStatus; indecidable: boolean };
   onRepondre: (message: MessageAffiche) => void;
   onHold: (message: MessageAffiche) => void;
+  /** Ouvrir le profil de l'auteur d'un message. Absent hors conversation. */
+  onOuvrirProfil?: (message: MessageAffiche) => void;
   onReagir: (message: MessageAffiche, emoji: string) => void;
   onRenvoyer: (message: MessageAffiche) => void;
   onAbandonner: (message: MessageAffiche) => void;
@@ -121,6 +123,7 @@ export function Timeline({
   recu,
   onRepondre,
   onHold,
+  onOuvrirProfil,
   onReagir,
   onRenvoyer,
   onAbandonner,
@@ -312,6 +315,7 @@ export function Timeline({
               onRepondre={() => onRepondre(message)}
               onHold={() => onHold(message)}
               onRevelerHeures={() => setHeuresVisibles((visible) => !visible)}
+              onOuvrirProfil={onOuvrirProfil ? () => onOuvrirProfil(message) : undefined}
               onReagir={(emoji) => onReagir(message, emoji)}
               onRenvoyer={message.envoi === "failed" ? () => onRenvoyer(message) : undefined}
               onAbandonner={message.envoi === "failed" ? () => onAbandonner(message) : undefined}

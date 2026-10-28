@@ -631,6 +631,12 @@ export function Conversation({ roomId }: { roomId: string }) {
           }
           recu={recu}
           onRepondre={(message) => setIntention({ quoi: "repondre", message })}
+          // Le même écran que le bouton « Profil » des informations, et la même route :
+          // c'est de là qu'on ouvre ensuite une conversation privée avec quelqu'un
+          // croisé dans un groupe.
+          onOuvrirProfil={(message) =>
+            router.push(`/profil/${encodeURIComponent(message.auteur)}`)
+          }
           onHold={setHoldSur}
           onReagir={reagir}
           onRenvoyer={(message) => void outbox?.retry(message.cle)}

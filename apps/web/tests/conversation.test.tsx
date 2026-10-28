@@ -238,6 +238,33 @@ describe("l'ordre du paquet, les séparateurs de date, la file d'envoi", () => {
   });
 });
 
+describe("le nom de l'auteur mène à son profil", () => {
+  it("c'est un bouton, nommé, et il ouvre le profil de la bonne personne", () => {
+    const onOuvrirProfil = vi.fn();
+    rendreMessage({ onOuvrirProfil });
+
+    // Un vrai contrôle : atteignable au clavier, et annoncé pour ce qu'il fait. Un
+    // `span` cliquable n'aurait ni l'un ni l'autre.
+    const bouton = screen.getByRole("button", { name: "Profil de alice" });
+    fireEvent.click(bouton);
+    expect(onOuvrirProfil).toHaveBeenCalledTimes(1);
+  });
+
+  it("sans destination, le nom reste du texte — jamais un bouton qui ne mène nulle part", () => {
+    // La recherche et les collections rendent des messages hors d'une conversation :
+    // elles n'ont pas de pile de navigation où pousser un profil.
+    rendreMessage({ onOuvrirProfil: undefined });
+    expect(screen.queryByRole("button", { name: "Profil de alice" })).toBeNull();
+    expect(screen.getByText("alice")).toBeTruthy();
+  });
+
+  it("on ne va pas voir son propre profil depuis sa propre bulle", () => {
+    // Le nom ne se rend pas du tout pour soi — donc aucun bouton à poser.
+    rendreMessage({ message: message({ moi: true }), onOuvrirProfil: vi.fn() });
+    expect(screen.queryByRole("button", { name: /^Profil de/ })).toBeNull();
+  });
+});
+
 describe("le message envoyé ne s'affiche pas en double", () => {
   /** Juste ce que `sansEchoDeFile` lit d'un événement du SDK. */
   const evenement = (txnId?: string) => ({ getTxnId: () => txnId });

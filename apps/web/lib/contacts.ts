@@ -72,13 +72,26 @@ export function contactsDeLaSession(session: Session): Contacts {
   const moi = session.client.getUserId();
 
   return {
-    lister: () =>
-      conversations(session)
-        .filter(
-          (conversation) =>
-            conversation.peerId !== undefined && conversation.peerId !== moi,
-        )
-        .map((conversation) => ({ userId: conversation.peerId!, nom: conversation.name })),
+    /**
+     * **Une personne, une entrée.** La liste parcourait les conversations : deux salons
+     * partagés avec quelqu'un donnaient deux fois la même personne, avec le même
+     * identifiant — vu à l'écran dans la feuille « nouvelle conversation », deux lignes
+     * `maxoumbetatest` identiques. Cocher l'une ou l'autre revient au même, et rien ne
+     * dit laquelle.
+     *
+     * Une `Map` par identifiant plutôt qu'un filtre : `conversations()` rend les salons
+     * du plus récent au plus ancien, donc la première rencontrée porte le nom le plus à
+     * jour, et c'est elle qu'on garde.
+     */
+    lister: () => {
+      const parPersonne = new Map<string, Contact>();
+      for (const conversation of conversations(session)) {
+        const userId = conversation.peerId;
+        if (userId === undefined || userId === moi || parPersonne.has(userId)) continue;
+        parPersonne.set(userId, { userId, nom: conversation.name });
+      }
+      return [...parPersonne.values()];
+    },
 
     demandes: () =>
       invitations(session).map((invitation) => ({

@@ -845,6 +845,25 @@ describe("la première conversation, pour que l'application ne s'ouvre pas vide"
       { userId: "@mira:tacita.test", nom: "Mira" },
     ]);
   });
+
+  /**
+   * **Une personne, une entrée.** Vu à l'écran dans la feuille « nouvelle conversation » :
+   * deux lignes identiques, même nom, même identifiant, parce que deux salons sont
+   * partagés avec cette personne. Cocher l'une ou l'autre revient au même, et rien ne dit
+   * laquelle.
+   */
+  it("deux salons avec la même personne ne la proposent qu'une fois", async () => {
+    listees.mockReturnValue([
+      { roomId: "!recent:tacita.test", peerId: "@mira:tacita.test", name: "Mira" },
+      { roomId: "!vieux:tacita.test", peerId: "@mira:tacita.test", name: "Mira (ancien nom)" },
+    ]);
+    const { session } = fausseSession();
+
+    // `conversations()` rend du plus récent au plus ancien : c'est le nom à jour qui reste.
+    expect(contactsDeLaSession(session).lister()).toEqual([
+      { userId: "@mira:tacita.test", nom: "Mira" },
+    ]);
+  });
 });
 
 describe("l'écran de connexion dit ce que le serveur a fait, pas autre chose", () => {
