@@ -103,6 +103,32 @@ export function rotationDeMatrice(matrice: Matrix | undefined): Rotation {
  * d'une piste facultative est une information, pas une panne ; c'est l'appelant qui sait
  * laquelle des deux il tient.
  */
+/**
+ * **Une image IDR dans un échantillon H.264 au format AVCC** : la seule image clé que le
+ * flux atteste lui-même, sans croire le conteneur.
+ *
+ * Le conteneur le dit d'ordinaire (`stss`, ou les drapeaux des fragments). Mais
+ * l'enregistrement de Safari est un MP4 **fragmenté**, et la première image d'un film
+ * d'iPhone y arrivait non marquée : le décodeur, qui exige une image clé en premier,
+ * tombait, et le film partait non réduit (« VideoDecoder is not configured », mesuré sur
+ * iPhone). Une NAL de type 5 ne ment pas.
+ *
+ * Chaque NAL est précédée de sa longueur, sur `tailleLongueur` octets (lue dans `avcC`).
+ * Un échantillon qui ne se découpe pas proprement rend `false` : on ne devine rien.
+ */
+export function contientIdr(donnees: Uint8Array, tailleLongueur: number): boolean {
+  let position = 0;
+  while (position + tailleLongueur < donnees.length) {
+    let longueur = 0;
+    for (let rang = 0; rang < tailleLongueur; rang++) longueur = longueur * 256 + donnees[position + rang]!;
+    position += tailleLongueur;
+    if (longueur === 0 || position + longueur > donnees.length) return false;
+    if ((donnees[position]! & 0x1f) === 5) return true;
+    position += longueur;
+  }
+  return false;
+}
+
 function boiteDe(
   fichier: ISOFile,
   pisteId: number,
@@ -209,16 +235,23 @@ export async function lireMp4(octets: Bytes): Promise<SourceVideo> {
 
       const echantillons: EchantillonVideo[] = [];
       const echantillonsAudio: PisteAudio["echantillons"] = [];
+      // H.264 seulement : c'est le seul flux dont on sait lire le type d'image. La taille
+      // du préfixe de longueur est dans `avcC` (`lengthSizeMinusOne`, 5ᵉ octet).
+      const avc = piste.codec.startsWith("avc1") || piste.codec.startsWith("avc3");
+      const tailleLongueur = ((description[4] ?? 3) & 0x03) + 1;
       fichier.onSamples = (id, _user, lot: Sample[]) => {
         for (const brut of lot) {
           if (!brut.data) continue;
           if (id === piste.id) {
+            const donnees = new Uint8Array(brut.data) as Bytes;
             echantillons.push({
-              donnees: new Uint8Array(brut.data) as Bytes,
+              donnees,
               // `cts` est la date de **présentation** : c'est ce que le muxeur attend, et
               // ce dont il redérive l'ordre de décodage.
               timestampUs: Math.round((brut.cts / brut.timescale) * 1_000_000),
-              cle: brut.is_sync,
+              // Le conteneur, **ou** le flux quand il atteste une IDR que le conteneur n'a
+              // pas marquée. Jamais l'inverse : un drapeau n'est pas retiré sur une lecture.
+              cle: brut.is_sync || (avc && contientIdr(donnees, tailleLongueur)),
             });
           } else {
             // La durée **déclarée**, dans l'échelle de la source : la recalculer
