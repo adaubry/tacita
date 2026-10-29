@@ -12,3 +12,5 @@ allowBuilds:
   # `next/image` — les nôtres sont des blobs déchiffrés, que le serveur ne peut
   # pas optimiser par construction (interdit n°5).
   sharp: false
+patchedDependencies:
+  mp4box@2.4.1: patches/mp4box@2.4.1.patch

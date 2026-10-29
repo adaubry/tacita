@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  mp4box@2.4.1: eb57aaa758a3bb6daafe7057f11178ddf4076ca9eef516933a3fe61be2cd1216
+
 importers:
 
   .:
@@ -189,7 +192,7 @@ importers:
         version: 42.0.0
       mp4box:
         specifier: 2.4.1
-        version: 2.4.1
+        version: 2.4.1(patch_hash=eb57aaa758a3bb6daafe7057f11178ddf4076ca9eef516933a3fe61be2cd1216)
     devDependencies:
       '@tacita/outbox':
         specifier: workspace:*
@@ -3363,7 +3366,7 @@ snapshots:
 
   minimist@1.2.8: {}
 
-  mp4box@2.4.1: {}
+  mp4box@2.4.1(patch_hash=eb57aaa758a3bb6daafe7057f11178ddf4076ca9eef516933a3fe61be2cd1216): {}
 
   ms@2.1.3: {}
 

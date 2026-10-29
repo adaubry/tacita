@@ -336,3 +336,85 @@ describe("piste audio : recopiée, entrelacée, relue", () => {
     expect(new TextDecoder("latin1").decode(fichier)).not.toContain("soun");
   });
 });
+
+/**
+ * **Le MP4 fragmenté de Safari, tel qu'il range ses fragments** : un `moof` par fragment,
+ * et dans la piste image **plusieurs `trun`**, chacun avec son `data_offset`, parce que
+ * le son est entrelacé entre eux dans le `mdat`.
+ *
+ * mp4box 2.4.1 n'honore le `data_offset` que du premier `trun` d'une piste : il lisait le
+ * second à la suite du premier, c'est-à-dire **dans le son**. Mesuré sur un film de la
+ * caméra d'iPhone : de la 16ᵉ image à la fin, les « images » étaient les trames AAC — le
+ * film se figeait après une demi-seconde, et le décodeur de Safari levait « Decoder
+ * failure » sur le chemin du réencodage.
+ */
+describe("MP4 fragmenté à plusieurs `trun` par piste : chaque run se lit à son adresse", () => {
+  const boite = (type: string, ...parts: number[][]): number[] => {
+    const corps = parts.flat();
+    const taille = 8 + corps.length;
+    return [taille >>> 24, (taille >>> 16) & 0xff, (taille >>> 8) & 0xff, taille & 0xff, ...[...type].map((c) => c.charCodeAt(0)), ...corps];
+  };
+  const u32 = (v: number) => [v >>> 24, (v >>> 16) & 0xff, (v >>> 8) & 0xff, v & 0xff];
+  const u64 = (v: number) => [...u32(0), ...u32(v)];
+
+  /** Un `trun` avec `data_offset`, durée et taille par échantillon. */
+  const trun = (donnees: Bytes[], decalage: number, duree: number) =>
+    boite("trun", [0, 0, 0x03, 0x01], u32(donnees.length), u32(decalage), ...donnees.map((d) => [...u32(duree), ...u32(d.length)]));
+
+  /** `tfhd` en `default-base-is-moof`, comme l'écrit AVFoundation. */
+  const traf = (piste: number, ...truns: number[][]) =>
+    boite("traf", boite("tfhd", [0, 0x02, 0, 0], u32(piste)), boite("tfdt", [1, 0, 0, 0], u64(0)), ...truns);
+
+  it("les images du second run sont des images, pas le son qui les précède", async () => {
+    // Un MP4 ordinaire à deux pistes, dont mp4box tire le segment d'initialisation.
+    const images = echantillons(20);
+    const trames = Array.from({ length: 10 }, (_u, rang) => ({
+      donnees: new Uint8Array(12).fill(0xa0 + rang) as Bytes,
+      duree: 1024,
+    }));
+    const ESDS = new Uint8Array([
+      0, 0, 0, 0x27, ...[..."esds"].map((c) => c.charCodeAt(0)), 0, 0, 0, 0,
+      0x03, 0x19, 0x00, 0x02, 0x00, 0x04, 0x11, 0x40, 0x15, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xf4,
+      0x00, 0x00, 0x01, 0xf4, 0x00, 0x05, 0x02, 0x12, 0x10, 0x06, 0x01, 0x02,
+    ]) as Bytes;
+    const audio = { esds: ESDS, timescale: 44_100, frequence: 44_100, canaux: 2, echantillons: trames };
+    const ordinaire = ecrireMp4({ largeur: 320, hauteur: 240, description: DESCRIPTION, echantillons: images, audio });
+
+    const { createFile, MP4BoxBuffer } = await import("mp4box");
+    const init = await new Promise<Uint8Array>((ok) => {
+      const fichier = createFile();
+      fichier.onReady = (info) => {
+        for (const piste of info.tracks) fichier.setSegmentOptions(piste.id, null, { nbSamples: 1000 });
+        ok(new Uint8Array(fichier.initializeSegmentation().buffer));
+      };
+      fichier.appendBuffer(MP4BoxBuffer.fromArrayBuffer(ordinaire.slice().buffer, 0));
+      fichier.flush();
+    });
+
+    // Le fragment à la Safari : [images 0-9][son][images 10-19] dans le `mdat`.
+    const run1 = images.slice(0, 10).map((e) => e.donnees);
+    const run2 = images.slice(10).map((e) => e.donnees);
+    const son = trames.map((t) => t.donnees);
+    const longueur = (l: Bytes[]) => l.reduce((n, d) => n + d.length, 0);
+    const construire = (taillMoof: number) => {
+      const debut = taillMoof + 8;
+      return boite(
+        "moof",
+        boite("mfhd", [0, 0, 0, 0], u32(1)),
+        traf(1, trun(run1, debut, PAS_US), trun(run2, debut + longueur(run1) + longueur(son), PAS_US)),
+        traf(2, trun(son, debut + longueur(run1), 1024)),
+      );
+    };
+    const moof = construire(construire(0).length);
+    const mdat = boite("mdat", [...run1, ...son, ...run2].flatMap((d) => [...d]));
+    const fragmente = new Uint8Array([...init, ...moof, ...mdat]) as Bytes;
+
+    const source = await lireMp4(fragmente);
+
+    expect(source.echantillons).toHaveLength(20);
+    source.echantillons.forEach((echantillon, rang) =>
+      expect([...echantillon.donnees]).toEqual([...images[rang]!.donnees]),
+    );
+    expect(source.audio!.echantillons.map((t) => t.donnees[0])).toEqual(trames.map((t) => t.donnees[0]));
+  });
+});
