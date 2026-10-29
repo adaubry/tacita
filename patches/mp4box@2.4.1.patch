@@ -1,0 +1,30 @@
+diff --git a/dist/styp-9TIZZDLN.mjs b/dist/styp-9TIZZDLN.mjs
+index 9fc4171ee2ce819557d7015745d085f317a7e266..ee63e2c6f06fd555e0b0868ab102c7dae4519714 100644
+--- a/dist/styp-9TIZZDLN.mjs
++++ b/dist/styp-9TIZZDLN.mjs
+@@ -6434,8 +6434,8 @@ var ISOFile = class ISOFile {
+ 							else bdo = moof.start;
+ 							else bdo = traf.tfhd.base_data_offset;
+ 							let offset;
+-							if (j === 0 && k === 0) if (dop) offset = bdo + trun.data_offset;
+-							else offset = bdo;
++							if (k === 0 && dop) offset = bdo + trun.data_offset;
++							else if (j === 0 && k === 0) offset = bdo;
+ 							else offset = last_run_position;
+ 							last_run_position = offset + size;
+ 							const number_in_traf = traf.sample_number;
+diff --git a/dist/styp-CouZUj9h.cjs b/dist/styp-CouZUj9h.cjs
+index 1c9119a65690f37df0dfcbd8267f75b389dcf7de..fb2e97a6b0496c5bb4f4e2cce96848951fc5479e 100644
+--- a/dist/styp-CouZUj9h.cjs
++++ b/dist/styp-CouZUj9h.cjs
+@@ -6452,8 +6452,8 @@ var ISOFile = class ISOFile {
+ 							else bdo = moof.start;
+ 							else bdo = traf.tfhd.base_data_offset;
+ 							let offset;
+-							if (j === 0 && k === 0) if (dop) offset = bdo + trun.data_offset;
+-							else offset = bdo;
++							if (k === 0 && dop) offset = bdo + trun.data_offset;
++							else if (j === 0 && k === 0) offset = bdo;
+ 							else offset = last_run_position;
+ 							last_run_position = offset + size;
+ 							const number_in_traf = traf.sample_number;
