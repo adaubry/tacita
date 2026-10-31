@@ -243,3 +243,17 @@ ip_range_whitelist: ${SYNAPSE_IP_RANGE_WHITELIST}
 modules:
   - module: tacita_password.TacitaPassword
     config: {}
+
+# Application services : **aucun dans la pile de base** (`[]`, posé par `docker-compose.yml`).
+# L'overlay `rtc/` y ajoute `lk-jwt-service`, dont l'enregistrement est rendu par
+# `entrypoint.sh` depuis `rtc/lk-jwt-appservice.yaml.tmpl`. Lister ici un fichier que la
+# pile de base ne monte pas empêcherait Synapse de démarrer sans les appels.
+app_service_config_files: ${SYNAPSE_APP_SERVICE_FILES}
+
+# MSC4502 — `GET /_matrix/client/unstable/io.element.msc4502/rooms/{id}/is_joined`.
+# Réservé aux jetons qui portent le scope `rooms:is_joined` (un application service qui le
+# déclare) : un jeton d'utilisateur ordinaire reçoit 403, l'endpoint n'est donc pas un
+# oracle d'appartenance. C'est par lui que `lk-jwt-service` refuse un jeton d'appel à qui
+# n'est pas membre du salon.
+experimental_features:
+  msc4502_enabled: true

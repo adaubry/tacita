@@ -62,6 +62,8 @@ const SECRETS_GENERES = new Set([
   "S3_SECRET_ACCESS_KEY",
   "GARAGE_RPC_SECRET",
   "LIVEKIT_SECRET",
+  "LIVEKIT_AS_TOKEN",
+  "LIVEKIT_HS_TOKEN",
 ]);
 
 const masquer = (valeur: string) => `${valeur.slice(0, 4)}… (${valeur.length} caractères)`;

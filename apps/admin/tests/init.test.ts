@@ -36,6 +36,8 @@ SYNAPSE_IP_RANGE_WHITELIST=["172.16.0.0/12"]
 # Deux variables, et rien d'autre à décider : le SFU et le TURN tiennent sur l'IP de l'hôte.
 LIVEKIT_KEY=change-me
 LIVEKIT_SECRET=change-me
+LIVEKIT_AS_TOKEN=change-me
+LIVEKIT_HS_TOKEN=change-me
 `;
 
 describe("la paire VAPID, produite sans dépendance ni conteneur jetable", () => {
@@ -96,6 +98,13 @@ describe("la préparation d'infra/.env depuis l'exemple", () => {
     expect(actionDe("LIVEKIT_KEY")).toBe("renseigné");
     expect(actionDe("LIVEKIT_SECRET")).toBe("généré");
     expect(valeurs.get("LIVEKIT_SECRET")).toHaveLength(64);
+    // Les jetons d'application service de lk-jwt-service : sans eux, pas de contrôle
+    // d'appartenance sur les jetons d'appel.
+    for (const jeton of ["LIVEKIT_AS_TOKEN", "LIVEKIT_HS_TOKEN"]) {
+      expect(actionDe(jeton)).toBe("généré");
+      expect(valeurs.get(jeton)).toHaveLength(64);
+    }
+    expect(valeurs.get("LIVEKIT_AS_TOKEN")).not.toBe(valeurs.get("LIVEKIT_HS_TOKEN"));
     for (const disparue of ["WEB_BIND_IP", "TURN_BIND_IP", "TURN_DOMAIN"]) {
       expect(modifications.map((m) => m.cle)).not.toContain(disparue);
     }

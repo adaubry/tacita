@@ -75,3 +75,47 @@ describe("une seule IPv4 suffit à l'hôte : le proxy garde le 443 pour lui seul
     expect(compose.services.proxy.ports).toBeUndefined();
   });
 });
+
+describe("un jeton d'appel n'est délivré qu'à un membre du salon", () => {
+  /*
+   * Relevé en pentest, confirmé en ligne : n'importe quel compte obtenait un jeton
+   * LiveKit pour n'importe quel salon dont il connaissait l'identifiant. lk-jwt-service
+   * v0.9.0 vérifie `is_joined` (MSC4502) — mais **seulement** s'il tourne en application
+   * service et que `LIVEKIT_FULL_ACCESS_HOMESERVERS` est exactement `LIVEKIT_HS_SERVER_NAME`
+   * (`handler.rs`, `verifies_legacy_membership`). Chaque condition est une ligne qui, retirée,
+   * éteint le contrôle sans rien casser.
+   */
+  const env = compose.services["lk-jwt-service"].environment;
+  const enregistrement = parse(
+    readFileSync(new URL("../lk-jwt-appservice.yaml.tmpl", import.meta.url), "utf-8"),
+  );
+  const homeserver = parse(
+    readFileSync(new URL("../../synapse/homeserver.yaml.tmpl", import.meta.url), "utf-8"),
+  );
+
+  it("le service tourne en application service, sur notre seul serveur", () => {
+    expect(env.LIVEKIT_HS_SERVER_NAME).toBe(env.LIVEKIT_FULL_ACCESS_HOMESERVERS);
+    expect(env.LIVEKIT_AS_TOKEN).toBe("${LIVEKIT_AS_TOKEN}");
+    expect(env.LIVEKIT_HS_TOKEN).toBe("${LIVEKIT_HS_TOKEN}");
+  });
+
+  it("Synapse charge l'enregistrement et sert `is_joined`", () => {
+    const synapse = compose.services.synapse;
+    expect(synapse.environment.SYNAPSE_APP_SERVICE_FILES).toBe(
+      '["/data/appservice/lk-jwt-appservice.yaml"]',
+    );
+    expect(synapse.volumes).toContain(
+      "./rtc/lk-jwt-appservice.yaml.tmpl:/conf/appservice/lk-jwt-appservice.yaml.tmpl:ro",
+    );
+    expect(homeserver.experimental_features.msc4502_enabled).toBe(true);
+  });
+
+  it("l'enregistrement ne donne que le scope, aucun espace de noms", () => {
+    // L'exemple amont (`users: .*`) laisserait le jeton agir au nom de n'importe qui.
+    expect(enregistrement.namespaces).toEqual({ users: [], aliases: [], rooms: [] });
+    expect(enregistrement["io.element.msc4502.scopes"]).toEqual([
+      "urn:matrix:client:io.element.msc4502:rooms:is_joined",
+    ]);
+    expect(enregistrement.url).toBeNull();
+  });
+});

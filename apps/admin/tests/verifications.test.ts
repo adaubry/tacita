@@ -38,6 +38,8 @@ const ENV_SAIN: Record<string, string> = {
   GARAGE_RPC_SECRET: "0123456789abcdef".repeat(4),
   LIVEKIT_KEY: "tacita",
   LIVEKIT_SECRET: "e1b8a4",
+  LIVEKIT_AS_TOKEN: "a5c0d1",
+  LIVEKIT_HS_TOKEN: "b7e2f3",
 };
 
 const contexte = (modifications: Partial<Contexte> = {}): Contexte =>

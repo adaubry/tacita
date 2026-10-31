@@ -65,6 +65,10 @@ export const SECRETS_REQUIS = [
   // seul découvre que n'importe qui pouvait forger un jeton.
   "LIVEKIT_KEY",
   "LIVEKIT_SECRET",
+  // Sans eux, lk-jwt-service ne démarre pas en application service et délivre des
+  // jetons d'appel sans vérifier l'appartenance au salon.
+  "LIVEKIT_AS_TOKEN",
+  "LIVEKIT_HS_TOKEN",
 ];
 
 export const fichierEnv: Verification = {
