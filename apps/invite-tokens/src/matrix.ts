@@ -1,5 +1,5 @@
 /**
- * Les trois seules requêtes Matrix du service. Toutes sont des **lectures faites au nom
+ * Les quatre seules requêtes Matrix du service. Toutes sont des **lectures faites au nom
  * de l'appelant, avec le jeton de l'appelant** : le service ne détient aucun jeton
  * d'administration, aucun droit d'inviter, aucun droit de créer un salon.
  */
@@ -10,6 +10,13 @@ export interface MatrixReader {
   ignores(accessToken: string, self: string, other: string): Promise<boolean>;
   /** un compte désactivé n'a plus de profil lisible. */
   accountExists(accessToken: string, userId: string): Promise<boolean>;
+  /**
+   * l'appelant est-il membre de `roomId` ? Lu dans **sa propre** liste de salons
+   * (`joined_rooms`), avec son jeton : aucun état de salon, aucun droit de plus. Sans ce
+   * contrôle, n'importe quel compte émettait un lien de groupe pour un salon étranger
+   * (relevé en pentest, confirmé en ligne).
+   */
+  isMember(accessToken: string, roomId: string): Promise<boolean>;
 }
 
 type Fetch = typeof globalThis.fetch;
@@ -51,6 +58,13 @@ export function createMatrixReader(homeserverUrl: string, doFetch: Fetch = fetch
         accessToken,
       );
       return profile !== undefined;
+    },
+
+    async isMember(accessToken, roomId) {
+      const body = (await call("/_matrix/client/v3/joined_rooms", accessToken)) as
+        | { joined_rooms?: unknown }
+        | undefined;
+      return Array.isArray(body?.joined_rooms) && body.joined_rooms.includes(roomId);
     },
   };
 }

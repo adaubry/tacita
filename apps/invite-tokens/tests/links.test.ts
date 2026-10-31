@@ -39,6 +39,7 @@ function fakeMatrix(jetons: Record<string, string> = { "jeton-bob": BOB, "jeton-
     // inspecte les arguments ne compile pas — ici, celui qui garde.
     ignores: vi.fn(async (_accessToken: string, _self: string, _other: string) => false),
     accountExists: vi.fn(async (_accessToken: string, _userId: string) => true),
+    isMember: vi.fn(async (_accessToken: string, _roomId: string) => true),
   } satisfies MatrixReader;
 }
 
@@ -88,6 +89,16 @@ describe("POST /links crée un lien, authentifié auprès de Synapse", () => {
 
     const ami = await lienAmi();
     expect(store.rows.get(ami.id)!.roomId).toBeNull();
+  });
+
+  it("un lien de groupe exige que l'émetteur soit membre du salon", async () => {
+    // Relevé en pentest : un compte quelconque émettait un lien pour un salon étranger.
+    matrix.isMember.mockResolvedValue(false);
+    const erreur = await échec(issue(deps, "jeton-bob", { kind: "group", roomId: SALON }));
+
+    expect(erreur.errcode).toBe("TACITA_BAD_ROOM");
+    expect(matrix.isMember).toHaveBeenCalledWith("jeton-bob", SALON);
+    expect(store.rows.size).toBe(0);
   });
 
   it("refuse plutôt que de corriger en silence : kind, roomId, maxUses, ttl", async () => {
@@ -239,7 +250,7 @@ describe("la résolution rend un identifiant, et le service s'arrête là", () =
     await resolve(deps, "jeton-mira", token);
 
     // Les seuls appels Matrix du service sont des lectures faites au nom de l'appelant.
-    expect(Object.keys(matrix)).toEqual(["whoami", "ignores", "accountExists"]);
+    expect(Object.keys(matrix)).toEqual(["whoami", "ignores", "accountExists", "isMember"]);
   });
 
   it("sans jeton valide, aucune résolution — et aucun usage consommé", async () => {
@@ -416,7 +427,9 @@ describe("émetteur disparu", () => {
 
     // Le garde : personne n'ajoute discrètement une lecture d'état de salon — elle
     // demanderait des droits Matrix, et c'est un amendement de spec, pas un correctif.
-    expect(codeDuService()).not.toMatch(/joined_members|joined_rooms|\/state\/|\/rooms\//);
+    // `joined_rooms` en est sorti : c'est la liste de l'appelant lui-même,
+    // lue avec son jeton à l'émission, pas l'état d'un salon.
+    expect(codeDuService()).not.toMatch(/joined_members|\/state\/|\/rooms\//);
   });
 
   it("vérifié à chaque résolution, jamais mis en cache", async () => {

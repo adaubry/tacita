@@ -38,25 +38,27 @@ const ressourceSecours = module.slice(
 );
 
 describe("D-12 — l'endpoint standard de changement de mot de passe est fermé", () => {
-  it("nginx renvoie 403 sur les deux versions du chemin", () => {
+  it("nginx renvoie 403 sous tous les préfixes du chemin", () => {
     /*
-     * `r0` comme `v3` : Synapse sert encore l'ancien préfixe, et n'en fermer qu'un
-     * laisserait un contournement d'une ligne à quiconque connaît l'API.
+     * `v3`, `r0` **et `unstable`** : Synapse sert les trois. N'en fermer que deux a laissé
+     * un contournement d'une ligne jusqu'à ce qu'un pentest le relève. Le bloc est donc une
+     * regex sur le préfixe, rejouée ici contre chaque chemin réel.
      */
-    for (const version of ["v3", "r0"]) {
-      const debut = nginx.indexOf(`location ^~ /_matrix/client/${version}/account/password`);
-      expect(debut, `bloc ${version} absent`).toBeGreaterThan(-1);
-      // Le corps du bloc, et rien d'autre : un `return 403;` trouvé ailleurs dans le
-      // fichier ne dirait rien de celui-ci.
-      const corps = nginx.slice(debut, nginx.indexOf("}", debut));
-      expect(corps).toContain("return 403;");
+    const blocs = [...nginx.matchAll(/location ~ (\S+) \{([^}]*)\}/g)].filter(([, motif]) =>
+      motif!.includes("account/password"),
+    );
+    expect(blocs, "bloc regex absent").toHaveLength(1);
+    const [, motif, corps] = blocs[0]!;
+    expect(corps).toContain("return 403;");
+    for (const version of ["v3", "r0", "unstable"]) {
+      expect(new RegExp(motif!).test(`/_matrix/client/${version}/account/password`), version).toBe(true);
     }
   });
 
-  it("le blocage est en `^~`, sinon la route générique reste candidate", () => {
-    // Sans `^~`, nginx compare deux préfixes et l'ordre du fichier ne tranche rien : la
-    // requête pourrait repartir vers Synapse par `location /_matrix`.
-    expect(nginx).toContain("location ^~ /_matrix/client/v3/account/password");
+  it("aucun `^~` sous `/_matrix/client` ne peut doubler la regex", () => {
+    // Un préfixe `^~` plus long que `/_matrix` qui couvrirait le chemin ferait sauter
+    // l'évaluation des regex : le blocage cesserait en silence.
+    expect(nginx).not.toMatch(/location \^~ \/_matrix\/client/);
   });
 });
 
