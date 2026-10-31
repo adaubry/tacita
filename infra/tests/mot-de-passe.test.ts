@@ -34,7 +34,7 @@ const CHEMIN_SECOURS = "/_synapse/client/tacita/login_recovery";
 /** Le corps de la ressource de secours, et rien d'autre du fichier. */
 const ressourceSecours = module.slice(
   module.indexOf("class _RessourceConnexion"),
-  module.indexOf("def create_module"),
+  module.indexOf("class _RessourceRemplacement"),
 );
 
 describe("D-12 — l'endpoint standard de changement de mot de passe est fermé", () => {
@@ -195,5 +195,37 @@ describe("le plancher de mot de passe est dit au même nombre partout", () => {
     expect(clientCore).toMatch(
       new RegExp(`LONGUEUR_MINIMALE_MOT_DE_PASSE = ${PLANCHER}\\b`),
     );
+  });
+});
+
+describe("la clé est vérifiée contre l'épingle du serveur, jamais contre l'account data", () => {
+  /*
+   * Relevé en pentest, confirmé en ligne : l'account data est écrite par n'importe quelle
+   * session. Vérifier la clé contre elle laissait un jeton volé y poser le descripteur
+   * d'une clé connue de lui, puis changer le mot de passe et s'ouvrir `login_recovery`.
+   * Scénario rejoué de bout en bout contre un Synapse 1.155 (reprise, refus, ré-épinglage).
+   */
+  const corps = (debut: string, fin: string) => module.slice(module.indexOf(debut), module.indexOf(fin));
+
+  it("les deux portes lisent l'épingle", () => {
+    expect(corps("class _Ressource(", "async def _descripteur")).toContain("await _epingle(");
+    expect(ressourceSecours).toContain("await _epingle(");
+    expect(corps("class _Ressource(", "async def _descripteur")).not.toContain("await _descripteur(");
+    expect(ressourceSecours).not.toContain("await _descripteur(");
+  });
+
+  it("une écriture d'account data n'épingle que la première clé", () => {
+    expect(module).toContain("register_account_data_callbacks(on_account_data_updated=");
+    expect(corps("async def ecriture", "api.register_account_data_callbacks")).toContain(
+      "remplacer=False",
+    );
+  });
+
+  it("remplacer l'épingle exige le mot de passe, et l'app l'appelle après une réinitialisation", () => {
+    const remplacement = corps("class _RessourceRemplacement", "def create_module");
+    expect(remplacement).toContain("_check_local_password(");
+    expect(remplacement).toContain("remplacer=True");
+    expect(module).toContain('"/_synapse/client/tacita/recovery_key"');
+    expect(clientCore).toContain('"/_synapse/client/tacita/recovery_key"');
   });
 });

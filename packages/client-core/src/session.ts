@@ -642,6 +642,8 @@ async function buildSession(
     async setupRecoveryKey({ reinitialiser = false, demanderMotDePasse }: SetupRecoveryOptions = {}) {
       const crypto = requireCrypto(client);
       let generated: RecoveryKey | undefined;
+      /** Le mot de passe, s'il est en main sans le redemander : il ré-épingle la clé. */
+      let motDePasseConnu = phraseDePasse;
 
       /*
        * **Le secret storage d'abord, le cross-signing ensuite** — l'ordre inverse ne
@@ -732,6 +734,7 @@ async function buildSession(
             // Le mot de passe de la session courante d'abord : le redemander à
             // quelqu'un qui vient de le taper serait un geste que rien ne justifie.
             const motDePasse = phraseDePasse ?? (await demanderMotDePasse?.());
+            motDePasseConnu = motDePasse;
             if (!motDePasse) throw erreur;
 
             return await envoyer(authMotDePasse(credentials.userId, motDePasse, sessionUia));
@@ -740,6 +743,25 @@ async function buildSession(
       });
 
       await relireIdentite(crypto);
+
+      /*
+       * **Le serveur ne croit que la clé qu'il a épinglée** (`tacita_password.py`) : la
+       * première du compte, puis seulement celle qu'on ré-épingle ici, mot de passe à
+       * l'appui. Sans cet appel, une réinitialisation laisserait le serveur sur l'ancienne
+       * clé — le changement de mot de passe et la connexion par clé la refuseraient.
+       *
+       * Sans mot de passe en main (aucune UIA ne l'a demandé, pas de phrase de passe),
+       * rien à envoyer : c'est le cas d'une première clé, que le serveur épingle seul.
+       * Un échec, lui, ne se tait pas (interdit n°13).
+       */
+      if (motDePasseConnu) {
+        await client.http.requestOtherUrl(
+          Method.Post,
+          new URL("/_synapse/client/tacita/recovery_key", client.baseUrl).toString(),
+          { password: motDePasseConnu },
+          { headers: { Authorization: `Bearer ${client.getAccessToken() ?? ""}` } },
+        );
+      }
       return generated;
     },
 
