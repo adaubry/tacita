@@ -45,7 +45,7 @@ services:
   # Traduit une identité Matrix en jeton d'accès LiveKit. Le SFU ne fait confiance
   # qu'aux jetons qu'il signe : c'est ici que se joue l'autorisation.
   lk-jwt-service:
-    image: ghcr.io/element-hq/lk-jwt-service@sha256:29918567e6b7cd920e2853b4cd6848ce01b79947c3d19a9f1ed5b74f0a2a88bf # main, résolu le 2026-08-02 (amont ne publie pas de tag semver)
+    image: ghcr.io/element-hq/lk-jwt-service@sha256:d210fd778ba38b7e42e6fc64e8a24a7d66ccc3b938fb20d73bd713224af2dfea # v0.9.0, résolu le 2026-10-31
     restart: unless-stopped
     environment:
       LIVEKIT_URL: wss://${SERVER_NAME}/livekit/sfu
@@ -53,7 +53,30 @@ services:
       LIVEKIT_SECRET: ${LIVEKIT_SECRET}
       # restreint au domaine du déploiement. `*` laisserait n'importe
       # quel homeserver déclencher la création de salles sur notre SFU.
+      #
+      # **Et c'est aussi ce qui allume le contrôle d'appartenance** : v0.9.0 ne vérifie
+      # `is_joined` sur `/sfu/get` et `/get_token` que si cette liste est exactement
+      # `LIVEKIT_HS_SERVER_NAME`. Y ajouter un second serveur l'éteindrait en silence.
       LIVEKIT_FULL_ACCESS_HOMESERVERS: ${SERVER_NAME}
+      # Application service (voir `lk-jwt-appservice.yaml.tmpl`) : les mêmes jetons que
+      # l'enregistrement que Synapse lit, et le serveur à interroger.
+      LIVEKIT_HS_SERVER_NAME: ${SERVER_NAME}
+      LIVEKIT_AS_TOKEN: ${LIVEKIT_AS_TOKEN}
+      LIVEKIT_HS_TOKEN: ${LIVEKIT_HS_TOKEN}
+      # Synapse par le réseau du compose, pas par l'IP publique et le proxy : le jeton
+      # d'application service ne sort pas de l'hôte.
+      LIVEKIT_CS_API_URL_OVERRIDES: ${SERVER_NAME}=http://synapse:8008
+
+  # Ce que les appels ajoutent à Synapse : l'enregistrement de `lk-jwt-service`, rendu au
+  # démarrage par `synapse/entrypoint.sh`. Fusionné avec le service de la pile de base.
+  synapse:
+    environment:
+      LIVEKIT_AS_TOKEN: ${LIVEKIT_AS_TOKEN}
+      LIVEKIT_HS_TOKEN: ${LIVEKIT_HS_TOKEN}
+      SYNAPSE_APP_SERVICE_FILES: '["/data/appservice/lk-jwt-appservice.yaml"]'
+    volumes:
+      # chemin relatif à `infra/`, comme partout dans cet overlay (voir `livekit-sfu`)
+      - ./rtc/lk-jwt-appservice.yaml.tmpl:/conf/appservice/lk-jwt-appservice.yaml.tmpl:ro
 
   # Element Call, le seul client RTC autorisé (interdit n°7), servi par
   # nous. Épinglé par digest comme tout le compose : c'est lui qui rend vraies les

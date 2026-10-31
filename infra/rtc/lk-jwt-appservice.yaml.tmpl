@@ -1,0 +1,29 @@
+# Enregistrement de `lk-jwt-service` auprès de Synapse comme *application service*.
+#
+# **Il n'existe que pour une question : « ce compte est-il membre de ce salon ? »**
+# (MSC4502, `is_joined`). Sans elle, le service délivrait un jeton d'appel pour n'importe
+# quel salon à n'importe quel compte qui en connaissait l'identifiant (relevé en pentest,
+# confirmé en ligne). Depuis v0.9.0, il la pose sur `/sfu/get` et `/get_token` dès qu'il
+# tourne en application service et que `LIVEKIT_FULL_ACCESS_HOMESERVERS` ne nomme que nous.
+#
+# **Moindre privilège, et c'est la raison d'être de chaque ligne vide ci-dessous.**
+# L'exemple amont déclare `users: [{regex: ".*"}]` : le jeton du service pourrait alors
+# agir au nom de n'importe quel compte (envoyer, lire, rejoindre). Il ne s'en sert que
+# pour déléguer les événements différés (MSC4140), que ce homeserver n'active pas
+# (`max_event_delay_duration` absent) — Element Call ne les demande donc jamais. Espaces
+# de noms vides : le jeton n'est que lui-même, et sa seule capacité est le scope.
+#
+# Rendu par `synapse/entrypoint.sh` dans `/data/appservice/`, comme `homeserver.yaml`.
+id: lk-jwt-service
+as_token: "${LIVEKIT_AS_TOKEN}"
+hs_token: "${LIVEKIT_HS_TOKEN}"
+sender_localpart: _lk_jwt_service
+# Aucun trafic d'événements : Synapse n'appelle jamais le service.
+url: null
+rate_limited: true
+namespaces:
+  users: []
+  aliases: []
+  rooms: []
+io.element.msc4502.scopes:
+  - "urn:matrix:client:io.element.msc4502:rooms:is_joined"
