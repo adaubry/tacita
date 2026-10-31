@@ -1,5 +1,5 @@
-# matrixdotorg/synapse:v1.155.0 (2026-06-16), digest épinglé
-FROM matrixdotorg/synapse@sha256:a87d002fba8efba807af19a876f488f4a9d298d6b62f5bab66d14e311a355e99
+# matrixdotorg/synapse:v1.164.1 (2026-10-28), digest épinglé
+FROM matrixdotorg/synapse@sha256:fa4aa980f279bcf26d4e7ecc2a2c9a701c73f2ebe8841da9bdcf3b2fdf693d75
 
 # gettext-base -> envsubst, pour rendre homeserver.yaml.tmpl avec les secrets du .env
 # synapse-s3-storage-provider non inclus dans l'image officielle

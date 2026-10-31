@@ -80,7 +80,7 @@ ignorés par git : chaque environnement garde le sien, le dépôt ne porte que l
 
 | Service | Version | Digest |
 |---|---|---|
-| Synapse | v1.155.0 (2026-06-16) | `sha256:a87d002f…` |
+| Synapse | v1.164.1 (2026-10-28) | `sha256:fa4aa980…` |
 | PostgreSQL | 16 | `sha256:33f923b0…` |
 | Keycloak | 26.7.0 | `sha256:0f198be2…` |
 | nginx | 1.27-alpine | `sha256:65645c7b…` |
