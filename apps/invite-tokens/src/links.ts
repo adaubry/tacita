@@ -97,6 +97,10 @@ export async function issue(
 
   const roomId = kind === "group" ? request.roomId : null;
   if (kind === "group" && typeof roomId !== "string") throw new LinkError(400, "TACITA_BAD_ROOM");
+  // Même refus qu'un salon mal formé : ne pas confirmer l'existence d'un salon étranger.
+  if (kind === "group" && !(await deps.matrix.isMember(accessToken!, roomId as string))) {
+    throw new LinkError(400, "TACITA_BAD_ROOM");
+  }
 
   const maxUses = request.maxUses ?? DEFAULT_MAX_USES;
   if (typeof maxUses !== "number" || !Number.isInteger(maxUses) || maxUses < 1) {

@@ -15,6 +15,7 @@ const matrix = {
   whoami: vi.fn(async (token: string) => ({ "jeton-bob": BOB, "jeton-mira": MIRA })[token]),
   ignores: vi.fn(async () => false),
   accountExists: vi.fn(async () => true),
+  isMember: vi.fn(async () => true),
 } satisfies MatrixReader;
 
 let store: ReturnType<typeof createMemoryStore>;
