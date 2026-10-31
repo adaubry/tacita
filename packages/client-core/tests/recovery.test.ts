@@ -129,6 +129,18 @@ describe("clé de récupération E2EE obligatoire à l'inscription", () => {
     expect(demanderMotDePasse).not.toHaveBeenCalled();
   });
 
+  it("la nouvelle clé est ré-épinglée côté serveur, mot de passe à l'appui", async () => {
+    // Sans cet appel, le serveur ne croirait que l'ancienne clé : changement de mot de
+    // passe et connexion par clé refuseraient la nouvelle.
+    const session = await initSession(config);
+    await session.setupRecoveryKey({ reinitialiser: true });
+
+    const appel = client.http.requestOtherUrl.mock.calls.find(([, url]) =>
+      url.endsWith("/_synapse/client/tacita/recovery_key"),
+    );
+    expect(appel?.[2]).toEqual({ password: config.motDePasse });
+  });
+
   it("après un rechargement, il demande le mot de passe — personne ne l'a plus", async () => {
     /*
      * `restoreSession` rouvre une session depuis le disque : le mot de passe n'y est pas,

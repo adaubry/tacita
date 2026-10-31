@@ -40,8 +40,10 @@ faire, et ce n'est pas une protection contre l'opérateur.
 from __future__ import annotations
 
 import hmac
+import json
 from base64 import b64decode, b64encode
 from hashlib import sha256
+from collections.abc import Mapping
 from typing import Any
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -52,6 +54,7 @@ from synapse.http.server import DirectServeJsonResource, respond_with_json
 from synapse.http.servlet import parse_json_object_from_request
 from synapse.http.site import SynapseRequest
 from synapse.module_api import ModuleApi
+
 
 # Le type d'account data qui décrit la clé de secret storage par défaut, et celui qui dit
 # laquelle est la clé par défaut. Tous deux dans la spec Matrix (« Secret storage »).
@@ -131,7 +134,7 @@ class _Ressource(DirectServeJsonResource):
             )
             return
 
-        descripteur = await _descripteur(self._api, user_id)
+        descripteur = await _epingle(self._api, user_id)
         if descripteur is None:
             # Aucune clé de récupération sur ce compte : il n'y a rien à opposer, et
             # laisser passer ferait du garde une option. On refuse, et le message dit quoi
@@ -175,16 +178,99 @@ async def _descripteur(api: ModuleApi, user_id: str) -> dict[str, Any] | None:
     if not defaut or not isinstance(defaut.get("key"), str):
         return None
 
-    description = await manager.get_global(user_id, DESCRIPTION + defaut["key"])
-    if not description or description.get("algorithm") != ALGORITHME:
+    # Un descripteur sans `iv`/`mac` existe : c'est le cas d'une clé dérivée d'une
+    # passphrase et jamais vérifiée. Rien à opposer, donc `_valide` refuse.
+    return _valide(await manager.get_global(user_id, DESCRIPTION + defaut["key"]))
+
+
+# **L'épingle : le descripteur auquel le serveur se fie, et que le client ne peut pas
+# réécrire.**
+#
+# L'account data est écrite par n'importe quelle session du compte. Vérifier la clé contre
+# elle, c'était laisser une session volée — sans mot de passe ni clé — y poser le
+# descripteur d'une clé qu'elle connaît, puis changer le mot de passe et s'ouvrir
+# `login_recovery` à volonté (relevé en pentest, confirmé en ligne). Le module garde donc
+# sa propre copie :
+#
+# - posée au **premier** descripteur valide que le compte écrit (l'inscription), ou à la
+#   reprise des comptes existants au démarrage ;
+# - jamais remplacée par une écriture d'account data — seulement par
+#   `/_synapse/client/tacita/recovery_key`, **mot de passe à l'appui**. C'est le geste
+#   « j'ai perdu ma clé », qui demande déjà le mot de passe (UIA du cross-signing), et
+#   depuis D-15 la clé dérive de ce mot de passe : il n'ouvre rien de plus qu'avant.
+#
+# Limite assumée : un compte qui n'a jamais posé de clé est épinglé par la première
+# session qui en écrit une. C'est le compte d'une inscription interrompue, sans
+# historique à protéger.
+TABLE = "tacita_cle_epinglee"
+
+
+def _creer_table(txn: Any) -> None:
+    txn.execute(
+        f"CREATE TABLE IF NOT EXISTS {TABLE} (user_id TEXT PRIMARY KEY, descripteur TEXT NOT NULL)"
+    )
+
+
+def _lire_epingle(txn: Any, user_id: str) -> dict[str, Any] | None:
+    txn.execute(f"SELECT descripteur FROM {TABLE} WHERE user_id = ?", (user_id,))
+    ligne = txn.fetchone()
+    return json.loads(ligne[0]) if ligne else None
+
+
+def _ecrire_epingle(txn: Any, user_id: str, descripteur: dict[str, Any], remplacer: bool) -> None:
+    conflit = "DO UPDATE SET descripteur = excluded.descripteur" if remplacer else "DO NOTHING"
+    txn.execute(
+        f"INSERT INTO {TABLE} (user_id, descripteur) VALUES (?, ?) ON CONFLICT (user_id) {conflit}",
+        (user_id, json.dumps(descripteur)),
+    )
+
+
+def _reprendre_existants(txn: Any) -> None:
+    """Épingle, une fois, le descripteur courant de chaque compte qui n'en a pas encore."""
+    _creer_table(txn)
+    txn.execute(
+        "SELECT user_id, content FROM account_data WHERE account_data_type = ?"
+        f" AND user_id NOT IN (SELECT user_id FROM {TABLE})",
+        (DEFAUT,),
+    )
+    for user_id, contenu in txn.fetchall():
+        cle = json.loads(contenu).get("key")
+        if not isinstance(cle, str):
+            continue
+        txn.execute(
+            "SELECT content FROM account_data WHERE user_id = ? AND account_data_type = ?",
+            (user_id, DESCRIPTION + cle),
+        )
+        ligne = txn.fetchone()
+        descripteur = _valide(json.loads(ligne[0])) if ligne else None
+        if descripteur is not None:
+            _ecrire_epingle(txn, user_id, descripteur, remplacer=False)
+
+
+def _valide(description: Any) -> dict[str, Any] | None:
+    """Le descripteur s'il est vérifiable (algorithme connu, `iv` et `mac`), sinon ``None``."""
+    # `Mapping` et pas `dict` : l'account data sort de Synapse en dictionnaire immuable.
+    if not isinstance(description, Mapping) or description.get("algorithm") != ALGORITHME:
         return None
-    if not isinstance(description.get("iv"), str) or not isinstance(
-        description.get("mac"), str
-    ):
-        # Un descripteur sans `iv`/`mac` existe : c'est le cas d'une clé dérivée d'une
-        # passphrase et jamais vérifiée. Rien à opposer, donc on refuse.
+    if not isinstance(description.get("iv"), str) or not isinstance(description.get("mac"), str):
         return None
     return dict(description)
+
+
+async def _epingle(api: ModuleApi, user_id: str) -> dict[str, Any] | None:
+    """Le descripteur épinglé du compte — **le seul** contre lequel une clé est vérifiée."""
+    return await api.run_db_interaction("tacita_lire_epingle", _lire_epingle, user_id)
+
+
+async def _epingler(api: ModuleApi, user_id: str, remplacer: bool) -> bool:
+    """Épingle le descripteur courant de l'account data. ``False`` s'il n'y en a pas de valide."""
+    descripteur = await _descripteur(api, user_id)
+    if descripteur is None:
+        return False
+    await api.run_db_interaction(
+        "tacita_ecrire_epingle", _ecrire_epingle, user_id, descripteur, remplacer
+    )
+    return True
 
 
 def _cle_valide(cle_b64: Any, descripteur: dict[str, Any]) -> bool:
@@ -264,8 +350,56 @@ class _RessourceConnexion(DirectServeJsonResource):
             # réponse-là se contournerait avec un secret que le compte détient déjà.
             return False
 
-        descripteur = await _descripteur(self._api, user_id)
+        descripteur = await _epingle(self._api, user_id)
         return descripteur is not None and _cle_valide(cle_b64, descripteur)
+
+
+class _RessourceRemplacement(DirectServeJsonResource):
+    """Ré-épingle la clé courante du compte, **mot de passe à l'appui**.
+
+    Appelé par le client juste après une réinitialisation (« j'ai perdu ma clé ») : la
+    nouvelle clé est déjà dans l'account data, mais le serveur continue de ne croire que
+    l'ancienne tant que le titulaire n'a pas prouvé qu'il l'est. Un jeton volé ne connaît
+    pas le mot de passe.
+    """
+
+    def __init__(self, api: ModuleApi) -> None:
+        super().__init__()
+        self._api = api
+        # Par compte : c'est un oracle de mot de passe pour qui tient une session, il ne
+        # doit pas coûter moins cher que `/login`.
+        self._limiteur = Ratelimiter(
+            store=api._store,
+            clock=api._clock,
+            cfg=api._hs.config.ratelimiting.rc_login_failed_attempts,
+        )
+
+    async def _async_render_POST(self, request: SynapseRequest) -> None:
+        requester = await self._api.get_user_by_req(request)
+        user_id = requester.user.to_string()
+        await self._limiteur.ratelimit(None, user_id.lower())
+
+        mot_de_passe = parse_json_object_from_request(request).get("password")
+        if not isinstance(mot_de_passe, str) or not mot_de_passe:
+            respond_with_json(request, 400, {"errcode": "M_MISSING_PARAM"}, send_cors=True)
+            return
+
+        if await self._api._auth_handler._check_local_password(user_id, mot_de_passe) is None:
+            respond_with_json(
+                request, 403, {"errcode": "M_FORBIDDEN", "error": "mot de passe incorrect"},
+                send_cors=True,
+            )
+            return
+
+        if not await _epingler(self._api, user_id, remplacer=True):
+            respond_with_json(
+                request,
+                403,
+                {"errcode": "M_FORBIDDEN", "error": "ce compte n'a pas de clé de récupération"},
+                send_cors=True,
+            )
+            return
+        respond_with_json(request, 200, {}, send_cors=True)
 
 
 def create_module(config: Any, api: ModuleApi) -> None:  # noqa: ARG001
@@ -273,6 +407,24 @@ def create_module(config: Any, api: ModuleApi) -> None:  # noqa: ARG001
     api.register_web_resource(
         "/_synapse/client/tacita/login_recovery", _RessourceConnexion(api)
     )
+    api.register_web_resource(
+        "/_synapse/client/tacita/recovery_key", _RessourceRemplacement(api)
+    )
+
+    async def ecriture(user_id: str, room_id: str | None, type_: str, contenu: Any) -> None:
+        # Seule la **première** clé d'un compte s'épingle d'elle-même (`remplacer=False`) :
+        # c'est l'inscription. Toute écriture suivante est ignorée ici.
+        if room_id is None and (type_ == DEFAUT or type_.startswith(DESCRIPTION)):
+            await _epingler(api, user_id, remplacer=False)
+
+    api.register_account_data_callbacks(on_account_data_updated=ecriture)
+
+    async def reprise() -> None:
+        await api.run_db_interaction("tacita_reprise_epingles", _reprendre_existants)
+
+    # Au démarrage, avant tout trafic utile : les comptes d'avant l'épingle la reçoivent
+    # de leur account data du moment.
+    api.delayed_background_call(0, reprise, desc="tacita_reprise_epingles")
 
 
 class TacitaPassword:

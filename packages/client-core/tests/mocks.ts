@@ -178,6 +178,7 @@ function makeClient(crypto: CryptoMock) {
       ),
     },
     getAccessToken: vi.fn((): string | null => "syt_access"),
+    baseUrl: "https://tacita.test",
     /**
      * les appareils du compte. Deux par défaut, dont celui de la session :
      * un compte à un seul appareil ne dirait rien de la distinction « le mien / les
